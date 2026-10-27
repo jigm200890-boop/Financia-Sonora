@@ -1,102 +1,103 @@
 # Portal de Acceso Único — Financia Sonora
 
-## 1. Lo que encontré (estado real, sin adornos)
+## 1. Punto de partida
 
-**El proyecto actual no contiene nada del portal.** Es la plantilla de arranque: una pantalla de bienvenida genérica ("Your App Name") y la librería de componentes visuales. No hay menú lateral, ni aplicaciones, ni agentes, ni base de datos, ni inicio de sesión. No hay nada que "ya sirva" como base funcional, pero sí es un punto de partida limpio y sin deuda: se puede construir el portal completo encima sin arrastrar restos.
+El proyecto aquí está vacío: es la plantilla de arranque (una pantalla de bienvenida genérica y componentes visuales). No hay portal, ni datos, ni inicio de sesión. Se construye todo desde cero, sin arrastrar restos de nada.
 
-**Los tres núcleos que enviaste, revisados:**
+La imagen que enviaste es la referencia real del portal que quieres: tema oscuro, barra azul superior, secciones por categoría (Núcleos Centrales, Aplicaciones de crédito y gestión, Portal web y soporte) y tarjetas con plataforma, cuenta, descripción, estado y botones "Abrir" / "Abrir editor". Ese diseño es la base visual que voy a replicar, con el inventario de aplicaciones que aparece ahí ya cargado.
 
-| Núcleo | Enlace | Estado real al consultarlo |
-|---|---|---|
-| Núcleo Central Operativo — Base44 | app pública + constructor | Abre, pero **exige iniciar sesión** (Google/correo). No se puede ver contenido sin credenciales. |
-| Centro de Control — Hércules | `centro-de-control-799208.onhercules.app` | **Público y activo.** Ya muestra un directorio de aplicaciones, agentes de IA, operaciones e integraciones, con el lema "sin credenciales guardadas, sin estados simulados". |
-| NEXO CENTRAL — Hércules | `01m5j2...hercules-dev.com` | Responde, pero es **preview privado: solo miembros de la organización** pueden entrar. |
+**Núcleos revisados en vivo:**
 
-Consecuencia importante: el Centro de Control ya cubre una parte de lo que describes (directorio de apps, agentes, tareas, integraciones). Por eso el portal **no lo reemplaza ni lo reconstruye**: lo integra como un núcleo más y añade lo que ese sistema no tiene — acceso unificado, base de conocimiento permanente, chat central y administración de cuentas.
+| Núcleo | Resultado real |
+|---|---|
+| Centro de Control — Hércules | Público y activo. Ya muestra directorio de aplicaciones, agentes, operaciones e integraciones. |
+| Núcleo Central Operativo — Base44 | Responde, pero exige iniciar sesión (Google/correo). |
+| NEXO CENTRAL — Hércules | Responde, pero es preview privado: solo miembros de la organización. |
 
-## 2. Qué se va a construir
+Esos núcleos no se reconstruyen: se enlazan y se supervisan desde el portal.
 
-Un portal propio, con backend real (base de datos, sesiones y almacenamiento), tema oscuro profesional con acento ámbar, navegación lateral fija de once secciones y diseño responsive (escritorio y móvil). No se reescribe ninguno de los tres núcleos: siguen funcionando como sistemas independientes y se abren desde el portal.
+## 2. Las tres piezas centrales
 
-### Acceso
-- Inicio de sesión propio del portal con correo y contraseña, sesión persistente y cierre de sesión.
-- Tres niveles de permiso: administrador, colaborador y solo lectura. El administrador ve y edita todo; el colaborador trabaja en apps, conocimiento, tareas, chat y flujos; solo lectura consulta sin modificar.
+### A. Página central de control
+Es la pantalla principal y la que replica tu referencia. Reúne **todas** las apps y webs en un solo lugar, aunque vivan en plataformas y cuentas distintas.
 
-### Inicio
-- Vista general: total de aplicaciones por estado, núcleos disponibles, agentes registrados, tareas abiertas y actividad reciente.
-- Accesos directos a los tres núcleos y aviso de qué requiere inicio de sesión externo.
+- Tarjetas agrupadas por categoría, con: nombre, plataforma (Base44, Hércules, Google, agentes IA, otra), cuenta propietaria, función, estado (activa / por verificar / pendiente / sin publicar), última verificación y URL.
+- Botones "Abrir", "Abrir editor" (solo si la app tiene constructor), "Copiar URL" y "Editar ficha".
+- Encabezado con contadores: total de aplicaciones, activas, por verificar y pendientes, más la fecha de última revisión.
+- Alta, edición y archivo de cualquier aplicación desde el propio portal, sin tocar código: nombre, plataforma, cuenta, función, URL pública, URL de constructor, estado y notas.
+- Búsqueda y filtros por plataforma, por cuenta/usuario y por estado.
+- **Verificación honesta:** al pulsar "Verificar" el portal consulta el sistema desde el servidor y anota la hora. El resultado es "alcanzable", "requiere inicio de sesión" o "no disponible". Nunca muestra una conexión inventada.
 
-### Aplicaciones
-- Tarjetas con: nombre, plataforma (Base44, Hércules u otra), cuenta propietaria, función, estado (activa / desconectada / pendiente), última verificación y listado de funciones disponibles y pendientes.
-- Botones "Abrir aplicación" y "Abrir constructor" (el segundo solo aparece si la app tiene constructor registrado), siempre en pestaña nueva.
-- Alta, edición, archivo y eliminación de aplicaciones; búsqueda y filtros por plataforma, cuenta, función y estado.
-- Las tres aplicaciones y los tres núcleos de arriba vienen precargados con sus enlaces reales. El correo de la cuenta propietaria queda como "por definir" y editable: no lo conozco y no lo voy a inventar.
-- **Verificación de conexión real:** al pulsar "Verificar" el portal consulta el sistema desde el servidor y registra la hora. El resultado es honesto: "alcanzable", "requiere inicio de sesión" o "no disponible". Nunca muestra "conectada" cuando no lo está.
+### B. Base de conocimiento tipo Drive
+Una pestaña con administrador de archivos real, no una lista plana:
 
-### Núcleos
-- Ficha de cada núcleo central con su función, sus enlaces de acceso, su estado verificado y notas de acceso (por ejemplo, que NEXO solo admite miembros de la organización).
+- Árbol de carpetas y subcarpetas a la izquierda, con crear, renombrar, mover y eliminar.
+- Vista de contenido con migas de pan (ruta), vista de cuadrícula o lista y orden por nombre o fecha.
+- Subida de archivos (PDF, imágenes, hojas de cálculo, documentos) que quedan guardados en el almacenamiento del portal y se pueden abrir, descargar o borrar.
+- Documentos propios creados dentro del portal con editor de texto enriquecido (títulos, listas, tablas, vínculos), autor y fecha de actualización.
+- Búsqueda por nombre y etiquetas en todo el conocimiento.
+- Todo persiste independientemente de las conversaciones: borrar un chat no borra nada del conocimiento.
 
-### Agentes IA
-- Registro de agentes: nombre, proveedor (ChatGPT, Claude, otro), función, responsabilidades, herramientas autorizadas, acceso al conocimiento compartido (sí/no) y estado.
-- Ficha de agente con su historial de actividad y las tareas que tiene asignadas.
+### C. Matriz de IA — dialogar con varias IA a la vez
+Una pestaña en formato de matriz: **una columna por agente**.
 
-### Conocimiento
-- Administrador de carpetas y documentos con editor de texto enriquecido, etiquetas, autor, fecha de actualización y búsqueda.
-- Todo se guarda en la base del portal, independiente de las conversaciones, y sobrevive aunque se borre un chat.
+- Columnas para ChatGPT, Claude y los agentes que se registren, cada una con su nombre, proveedor y función.
+- Una barra de mensaje compartida que envía la misma pregunta a todas las columnas y recibe las respuestas en paralelo, para comparar criterios en el mismo instante.
+- Cada columna permite además conversar solo con ese agente, y se puede activar o desactivar qué agentes participan.
+- Conversaciones guardadas y recuperables; desde cualquier respuesta se puede "Guardar en Conocimiento" o "Crear tarea".
+- Si un agente falla o no responde, su columna lo indica y se puede reintentar; no se simulan respuestas.
 
-### Chat central (con IA real)
-- Una sola interfaz para conversar con los agentes registrados; cada conversación queda guardada con su historial y puede retomarse después.
-- Respuestas generadas por un modelo de IA a través del backend del portal (la clave del modelo nunca queda expuesta en el navegador).
-- Desde un mensaje se puede crear una tarea o guardar una decisión en Conocimiento, para que el trabajo no se pierda en el chat.
-- Si el modelo no responde o falla, el mensaje se marca como error y se puede reintentar; no se simulan respuestas.
+## 3. Módulos de apoyo
 
-### Tareas
-- Tablero y lista con título, responsable, prioridad, estado, fecha y vínculo a una aplicación, un agente o un flujo.
-- Filtros por responsable y estado, y contador de pendientes en el menú.
+- **Núcleos:** ficha de cada núcleo con su función, enlaces, estado verificado y notas de acceso (por ejemplo, que NEXO solo admite miembros de la organización).
+- **Agentes IA:** registro con nombre, proveedor, función, responsabilidades, herramientas autorizadas y si accede al conocimiento compartido. Los agentes registrados aparecen en la matriz.
+- **Chat central:** bandeja de conversaciones con historial, búsqueda y vínculo a tareas y conocimiento.
+- **Tareas:** título, responsable, prioridad, estado, fecha y vínculo a una app, agente o flujo, con contador de pendientes en el menú.
+- **Flujos de trabajo:** procesos con pasos ordenados (quién hace qué, en qué orden, con qué app o agente) y vista de diagrama generada de esos pasos.
+- **Integraciones:** inventario de conexiones con tipo, estado, responsable y última verificación.
+- **Cuentas y usuarios:** correos y cuentas por plataforma, con función, permisos y apps asociadas; y los usuarios del portal con su nivel de permiso.
+- **Configuración:** datos del portal, preferencias de tema, usuarios y registro de verificaciones.
+- **Acceso:** inicio de sesión propio con correo y contraseña, sesión persistente, y tres niveles (administrador, colaborador, solo lectura).
 
-### Flujos de trabajo
-- Procesos con nombre, objetivo, responsable y pasos ordenados (quién hace qué, en qué orden, con qué app o agente).
-- Vista de diagrama del flujo generada a partir de los pasos, para leerlo de un vistazo.
-- El lienzo libre con nodos arrastrables y conexiones dibujadas a mano queda para una fase posterior (ver sección 4).
+## 4. Inventario que se precarga
 
-### Integraciones
-- Inventario de conexiones: servicio, tipo (API, enlace autorizado o solo informativo), estado, responsable, última sincronización y notas.
-- Verificación desde el servidor con el mismo criterio honesto que en Aplicaciones.
-- Se registra lo que existe; no se simula intercambio de datos con plataformas que no expongan una API autorizada.
+Tomado de tu imagen; todo queda editable y con lo dudoso marcado como "por verificar", no inventado.
 
-### Cuentas y usuarios
-- Directorio de correos y cuentas por plataforma (Base44, Hércules, otras), con su función, permisos y apps asociadas.
-- Administración de los usuarios del portal y su nivel de permiso.
+- **Núcleos:** Centro de Control (Hércules) · Núcleo Central Operativo (Base44) · Núcleo Central OP (Cappy, sin publicar)
+- **Crédito y gestión:** FinanciaPro Sonora (Base44 / creditosenlinea5) · PrestaCore (Base44 / Capps) · Financia Sonora CORE (Base44) · Financia Sonora — Gestión de préstamos (Hércules) · Credit Management System (Hércules)
+- **Portal web y soporte:** Portal público Financia Sonora (Base44) · ChatMaster CRM (Base44) · MandaderoPro (Base44) · Drive FINANCIA SONORA (Google) · Supagente (agente IA)
 
-### Configuración
-- Datos del portal (nombre, identidad visual), preferencias de tema, y gestión de usuarios y permisos.
-- Registro de las últimas verificaciones y de los cambios importantes.
+Los correos de cuenta, URLs de constructor y estados que no aparecen confirmados en la imagen quedan vacíos y señalados como pendientes, para que los completes desde la ficha de cada app.
 
-## 3. Límites que el portal respeta (importante)
+## 5. Diseño
 
-- **No se guardan contraseñas de terceros.** El portal guarda correos y notas de acceso, nunca claves de Base44, Hércules o NEXO. No hay "acceso automático" a esas plataformas: al abrirlas, cada una pide su propio inicio de sesión.
-- **La verificación confirma alcance, no contenido.** Sabremos si el sistema responde y si exige sesión; no se leerán datos privados de apps que no autorizan API.
-- **No se promete inicio de sesión único hacia las apps externas.** Solo el portal tiene sesión única propia; las integraciones autorizadas se añadirán cuando existan.
-- **Los núcleos no se modifican ni se migran.** Se enlazan y se supervisan.
+Se sigue tu referencia: fondo azul muy oscuro, barra superior con el nombre Financia Sonora y "Portal de Acceso Único", títulos de sección en azul con contador, tarjetas oscuras de borde fino, distintivos de plataforma por color (Hércules azul, Base44 violeta, Google verde, agentes ámbar), botones verdes para abrir y azules para editar. Tipografía limpia, densidad de consola, totalmente responsive: en móvil el menú se colapsa y las tarjetas pasan a una columna.
 
-## 4. Fuera de esta entrega (fase siguiente)
+## 6. Límites que se respetan
 
-- Lienzo de flujos con arrastre libre y conexiones dibujadas.
+- No se guardan contraseñas de terceros; solo correos y notas. Cada plataforma externa pide su propio inicio de sesión.
+- La verificación confirma alcance, no contenido privado.
+- No se promete inicio de sesión único hacia Base44, Hércules o Google: no lo permiten desde aquí.
+- Los núcleos siguen siendo sistemas independientes; no se fusionan ni se migran.
+- La matriz usa los modelos disponibles en el proyecto y los agentes registrados; no se conecta a tu cuenta personal de ChatGPT o Claude sin una clave autorizada.
+
+## 7. Fuera de esta entrega
+
+- Lienzo libre de flujos con nodos arrastrables y conexiones dibujadas.
 - Diagramas y mapas conceptuales dentro de Conocimiento.
-- Sincronización bidireccional por API con Base44 o Hércules (requiere credenciales y permisos que esas plataformas deben conceder).
-- Inicio de sesión único (Google u otro proveedor) hacia el portal.
+- Sincronización bidireccional por API con Base44, Hércules o Google Drive (requiere credenciales y permisos que esas plataformas deben conceder).
+- Inicio de sesión único con Google hacia el portal.
 
-## 5. Resultado observable
+## 8. Resultado observable
 
-- [ ] Entro con mi correo y contraseña, y la sesión se mantiene al recargar.
-- [ ] Veo las tres aplicaciones y los tres núcleos precargados con sus enlaces reales, y "Abrir aplicación" los abre en pestaña nueva.
-- [ ] "Verificar" produce un estado y una hora reales; si un sistema no responde o exige sesión, lo dice tal cual.
-- [ ] Puedo dar de alta una aplicación nueva y editarla sin tocar código.
-- [ ] Registro un agente con su función y sus herramientas autorizadas y lo encuentro en el chat.
-- [ ] Converso con un agente en el chat, cierro el portal, vuelvo y el historial sigue ahí.
-- [ ] Creo una carpeta y un documento en Conocimiento; el documento sigue existiendo aunque borre la conversación.
-- [ ] Convierto un mensaje del chat en tarea y la veo en Tareas con su responsable y estado.
-- [ ] El contador de pendientes del menú coincide con las tareas abiertas.
-- [ ] Un usuario de solo lectura puede consultar todo pero no editar ni verificar.
-- [ ] En móvil el menú se colapsa y todas las secciones siguen siendo utilizables.
+- [ ] Abro el portal y veo la página central con las cinco/trece aplicaciones de la referencia agrupadas por categoría y sus distintivos de plataforma.
+- [ ] Filtro por plataforma, por cuenta y por estado, y encuentro la app que busco.
+- [ ] "Abrir" y "Abrir editor" llevan a la URL correcta en pestaña nueva; "Verificar" devuelve estado y hora reales.
+- [ ] Doy de alta una app nueva con su cuenta y su URL de constructor, sin tocar código.
+- [ ] En Conocimiento creo una carpeta, una subcarpeta, subo un archivo y creo un documento; todo sigue ahí tras recargar.
+- [ ] En la matriz envío una pregunta y recibo respuesta de varias IA al mismo tiempo, cada una en su columna.
+- [ ] Guardo una respuesta de la matriz en Conocimiento y la encuentro en su carpeta.
+- [ ] Cierro sesión, vuelvo a entrar y mi historial, mis tareas y mis carpetas siguen intactos.
+- [ ] Un usuario de solo lectura consulta todo pero no edita ni verifica.
+- [ ] En móvil el menú se colapsa y las tres piezas principales siguen siendo utilizables.
 - [ ] Ninguna pantalla muestra un estado de conexión inventado.
