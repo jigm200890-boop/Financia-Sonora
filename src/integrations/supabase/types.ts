@@ -3360,13 +3360,476 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      portal_agents: {
+        Row: {
+          accent: string
+          created_at: string
+          description: string | null
+          id: string
+          model: string
+          name: string
+          protocol: string
+          provider: string
+          responsibilities: string | null
+          sort_order: number
+          status: string
+          tools: string[]
+          uses_knowledge: boolean
+        }
+        Insert: {
+          accent?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          model: string
+          name: string
+          protocol?: string
+          provider?: string
+          responsibilities?: string | null
+          sort_order?: number
+          status?: string
+          tools?: string[]
+          uses_knowledge?: boolean
+        }
+        Update: {
+          accent?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          model?: string
+          name?: string
+          protocol?: string
+          provider?: string
+          responsibilities?: string | null
+          sort_order?: number
+          status?: string
+          tools?: string[]
+          uses_knowledge?: boolean
+        }
+        Relationships: []
+      }
+      portal_apps: {
+        Row: {
+          app_url: string | null
+          builder_url: string | null
+          category: string
+          created_at: string
+          created_by: string | null
+          features_pending: string[]
+          features_ready: string[]
+          id: string
+          last_check_result: string | null
+          last_checked_at: string | null
+          name: string
+          notes: string | null
+          owner_account: string | null
+          platform: string
+          sort_order: number
+          status: string
+          summary: string | null
+          updated_at: string
+        }
+        Insert: {
+          app_url?: string | null
+          builder_url?: string | null
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          features_pending?: string[]
+          features_ready?: string[]
+          id?: string
+          last_check_result?: string | null
+          last_checked_at?: string | null
+          name: string
+          notes?: string | null
+          owner_account?: string | null
+          platform?: string
+          sort_order?: number
+          status?: string
+          summary?: string | null
+          updated_at?: string
+        }
+        Update: {
+          app_url?: string | null
+          builder_url?: string | null
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          features_pending?: string[]
+          features_ready?: string[]
+          id?: string
+          last_check_result?: string | null
+          last_checked_at?: string | null
+          name?: string
+          notes?: string | null
+          owner_account?: string | null
+          platform?: string
+          sort_order?: number
+          status?: string
+          summary?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      portal_check_logs: {
+        Row: {
+          checked_at: string
+          checked_by: string | null
+          detail: string | null
+          id: string
+          result: string
+          target_id: string
+          target_name: string | null
+          target_type: string
+        }
+        Insert: {
+          checked_at?: string
+          checked_by?: string | null
+          detail?: string | null
+          id?: string
+          result: string
+          target_id: string
+          target_name?: string | null
+          target_type: string
+        }
+        Update: {
+          checked_at?: string
+          checked_by?: string | null
+          detail?: string | null
+          id?: string
+          result?: string
+          target_id?: string
+          target_name?: string | null
+          target_type?: string
+        }
+        Relationships: []
+      }
+      portal_conversations: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          mode: string
+          session_id: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          mode?: string
+          session_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          mode?: string
+          session_id?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      portal_integrations: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          last_check_result: string | null
+          last_checked_at: string | null
+          name: string
+          notes: string | null
+          owner: string | null
+          status: string
+          url: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind?: string
+          last_check_result?: string | null
+          last_checked_at?: string | null
+          name: string
+          notes?: string | null
+          owner?: string | null
+          status?: string
+          url?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          last_check_result?: string | null
+          last_checked_at?: string | null
+          name?: string
+          notes?: string | null
+          owner?: string | null
+          status?: string
+          url?: string | null
+        }
+        Relationships: []
+      }
+      portal_knowledge_folders: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          parent_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          parent_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_knowledge_folders_parent_id_fkey"
+            columns: ["parent_id"]
+            referencedRelation: "portal_knowledge_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portal_knowledge_items: {
+        Row: {
+          content: string | null
+          created_at: string
+          created_by: string | null
+          folder_id: string | null
+          id: string
+          kind: string
+          mime_type: string | null
+          name: string
+          size_bytes: number | null
+          storage_path: string | null
+          tags: string[]
+          updated_at: string
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          created_by?: string | null
+          folder_id?: string | null
+          id?: string
+          kind?: string
+          mime_type?: string | null
+          name: string
+          size_bytes?: number | null
+          storage_path?: string | null
+          tags?: string[]
+          updated_at?: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          created_by?: string | null
+          folder_id?: string | null
+          id?: string
+          kind?: string
+          mime_type?: string | null
+          name?: string
+          size_bytes?: number | null
+          storage_path?: string | null
+          tags?: string[]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_knowledge_items_folder_id_fkey"
+            columns: ["folder_id"]
+            referencedRelation: "portal_knowledge_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portal_messages: {
+        Row: {
+          agent_id: string | null
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          role: string
+        }
+        Insert: {
+          agent_id?: string | null
+          content?: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          role: string
+        }
+        Update: {
+          agent_id?: string | null
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_messages_agent_id_fkey"
+            columns: ["agent_id"]
+            referencedRelation: "portal_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portal_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            referencedRelation: "portal_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portal_profiles: {
+        Row: {
+          created_at: string
+          email: string
+          full_name: string | null
+          id: string
+          role: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          full_name?: string | null
+          id: string
+          role?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          full_name?: string | null
+          id?: string
+          role?: string
+        }
+        Relationships: []
+      }
+      portal_tasks: {
+        Row: {
+          agent_id: string | null
+          app_id: string | null
+          assignee: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          due_date: string | null
+          id: string
+          priority: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          agent_id?: string | null
+          app_id?: string | null
+          assignee?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          priority?: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          agent_id?: string | null
+          app_id?: string | null
+          assignee?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          id?: string
+          priority?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_tasks_agent_id_fkey"
+            columns: ["agent_id"]
+            referencedRelation: "portal_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portal_tasks_app_id_fkey"
+            columns: ["app_id"]
+            referencedRelation: "portal_apps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portal_workflows: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          objective: string | null
+          owner: string | null
+          status: string
+          steps: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          objective?: string | null
+          owner?: string | null
+          status?: string
+          steps?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          objective?: string | null
+          owner?: string | null
+          status?: string
+          steps?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      portal_can_edit: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
+      portal_is_admin: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never

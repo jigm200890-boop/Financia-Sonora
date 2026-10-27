@@ -1,0 +1,36 @@
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'portal-knowledge',
+  'portal-knowledge',
+  false,
+  20971520,
+  array[
+    'application/pdf','image/jpeg','image/png','image/webp','image/gif','image/svg+xml',
+    'text/plain','text/csv','text/markdown','application/json',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/zip'
+  ]::text[]
+)
+on conflict (id) do nothing;
+
+create policy "portal_knowledge_read"
+on storage.objects for select to authenticated
+using (bucket_id = 'portal-knowledge');
+
+create policy "portal_knowledge_insert"
+on storage.objects for insert to authenticated
+with check (bucket_id = 'portal-knowledge');
+
+create policy "portal_knowledge_update"
+on storage.objects for update to authenticated
+using (bucket_id = 'portal-knowledge')
+with check (bucket_id = 'portal-knowledge');
+
+create policy "portal_knowledge_delete"
+on storage.objects for delete to authenticated
+using (bucket_id = 'portal-knowledge');

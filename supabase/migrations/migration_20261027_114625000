@@ -1,0 +1,2 @@
+delete from public.portal_profiles where id = 'b8c3580d-bbb0-4ada-b30c-ca16a1153ade';
+delete from auth.users where id = 'b8c3580d-bbb0-4ada-b30c-ca16a1153ade' and email = 'qa.portal@financiasonora.test';
