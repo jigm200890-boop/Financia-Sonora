@@ -3514,6 +3514,39 @@ export type Database = {
         }
         Relationships: []
       }
+      portal_backup_steps: {
+        Row: {
+          detail: string | null
+          id: string
+          phase: string
+          sort_order: number
+          status: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          detail?: string | null
+          id?: string
+          phase: string
+          sort_order?: number
+          status?: string
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          detail?: string | null
+          id?: string
+          phase?: string
+          sort_order?: number
+          status?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       portal_check_logs: {
         Row: {
           checked_at: string
@@ -3719,6 +3752,43 @@ export type Database = {
             foreignKeyName: "portal_knowledge_items_world_id_fkey"
             columns: ["world_id"]
             referencedRelation: "portal_worlds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portal_knowledge_versions: {
+        Row: {
+          content: string | null
+          id: string
+          item_id: string
+          name: string
+          saved_at: string
+          saved_by: string | null
+          tags: string[]
+        }
+        Insert: {
+          content?: string | null
+          id?: string
+          item_id: string
+          name: string
+          saved_at?: string
+          saved_by?: string | null
+          tags?: string[]
+        }
+        Update: {
+          content?: string | null
+          id?: string
+          item_id?: string
+          name?: string
+          saved_at?: string
+          saved_by?: string | null
+          tags?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_knowledge_versions_item_id_fkey"
+            columns: ["item_id"]
+            referencedRelation: "portal_knowledge_items"
             referencedColumns: ["id"]
           },
         ]

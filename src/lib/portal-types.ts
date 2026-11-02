@@ -19,6 +19,8 @@ export type WorkflowRow = Tables["portal_workflows"]["Row"];
 export type CheckLogRow = Tables["portal_check_logs"]["Row"];
 export type ObjectiveRow = Tables["portal_objectives"]["Row"];
 export type AgreementRow = Tables["portal_agreements"]["Row"];
+export type BackupStepRow = Tables["portal_backup_steps"]["Row"];
+export type KnowledgeVersionRow = Tables["portal_knowledge_versions"]["Row"];
 
 export type WorkflowStep = {
   title: string;

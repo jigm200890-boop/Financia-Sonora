@@ -13,6 +13,8 @@ import {
   type MessageRow,
   type ObjectiveRow,
   type AgreementRow,
+  type BackupStepRow,
+  type KnowledgeVersionRow,
   type ProfileRow,
   type Role,
   type TaskRow,
@@ -38,6 +40,8 @@ export const qk = {
   coreConversation: [ROOT, "core-conversation"],
   objectives: [ROOT, "objectives"],
   agreements: [ROOT, "agreements"],
+  backupSteps: [ROOT, "backup-steps"],
+  versions: (id: string) => [ROOT, "versions", id],
   messages: (id: string) => [ROOT, "messages", id],
 };
 
@@ -617,6 +621,79 @@ export function useDeleteAgreement() {
       fail(error);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.agreements }),
+  });
+}
+
+/* ------------------------------------------------------------- respaldo */
+
+export function useBackupSteps() {
+  return useQuery({
+    queryKey: qk.backupSteps,
+    queryFn: async (): Promise<BackupStepRow[]> => {
+      const { data, error } = await supabase
+        .from("portal_backup_steps")
+        .select("*")
+        .order("sort_order", { ascending: true });
+      fail(error);
+      return data ?? [];
+    },
+  });
+}
+
+export function useSetBackupStepStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { id: string; status: string }) => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from("portal_backup_steps")
+        .update({ status: input.status, updated_by: user?.id ?? null })
+        .eq("id", input.id);
+      fail(error);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.backupSteps }),
+  });
+}
+
+/* ------------------------------------------------------------ versiones */
+
+export function useKnowledgeVersions(itemId?: string) {
+  return useQuery({
+    queryKey: qk.versions(itemId ?? "none"),
+    enabled: !!itemId,
+    queryFn: async (): Promise<KnowledgeVersionRow[]> => {
+      const { data, error } = await supabase
+        .from("portal_knowledge_versions")
+        .select("*")
+        .eq("item_id", itemId as string)
+        .order("saved_at", { ascending: false })
+        .limit(20);
+      fail(error);
+      return data ?? [];
+    },
+  });
+}
+
+export function useRestoreVersion() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (version: { item_id: string; name: string; content: string | null; tags: string[] }) => {
+      const { error } = await supabase
+        .from("portal_knowledge_items")
+        .update({
+          name: version.name,
+          content: version.content,
+          tags: version.tags,
+        })
+        .eq("id", version.item_id);
+      fail(error);
+    },
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: qk.items });
+      qc.invalidateQueries({ queryKey: qk.versions(variables.item_id) });
+    },
   });
 }
 

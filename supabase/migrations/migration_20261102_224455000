@@ -1,0 +1,2 @@
+delete from public.portal_profiles where id = '25ab753a-f67f-4727-90ce-141789063945';
+delete from auth.users where id = '25ab753a-f67f-4727-90ce-141789063945' and email = 'qa.permisos@financiasonora.test';

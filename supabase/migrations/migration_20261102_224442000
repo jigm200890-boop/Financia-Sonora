@@ -1,0 +1,3 @@
+update public.portal_worlds
+set visibility = 'owner', owner_id = 'd95aed2b-142f-408f-a12e-b95477b7e624'
+where name = 'Núcleo Central';

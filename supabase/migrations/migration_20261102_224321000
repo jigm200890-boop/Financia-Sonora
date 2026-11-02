@@ -1,0 +1,74 @@
+-- Respaldo y versionado de información
+create table if not exists public.portal_backup_steps (
+  id uuid primary key default gen_random_uuid(),
+  phase text not null,
+  title text not null,
+  detail text,
+  status text not null default 'pendiente' check (status in ('pendiente','en_curso','hecho','bloqueado')),
+  sort_order integer not null default 0,
+  updated_at timestamptz not null default now(),
+  updated_by uuid references auth.users(id) on delete set null
+);
+
+alter table public.portal_backup_steps enable row level security;
+create policy portal_backup_admin_read on public.portal_backup_steps for select to authenticated
+  using (public.portal_is_admin());
+create policy portal_backup_admin_update on public.portal_backup_steps for update to authenticated
+  using (public.portal_is_admin()) with check (public.portal_is_admin());
+create policy portal_backup_admin_insert on public.portal_backup_steps for insert to authenticated
+  with check (public.portal_is_admin());
+
+create table if not exists public.portal_knowledge_versions (
+  id uuid primary key default gen_random_uuid(),
+  item_id uuid not null references public.portal_knowledge_items(id) on delete cascade,
+  name text not null,
+  content text,
+  tags text[] not null default '{}',
+  saved_at timestamptz not null default now(),
+  saved_by uuid references auth.users(id) on delete set null
+);
+
+create index if not exists portal_versions_item_idx on public.portal_knowledge_versions(item_id);
+
+alter table public.portal_knowledge_versions enable row level security;
+create policy portal_versions_read on public.portal_knowledge_versions for select to authenticated
+  using (exists (
+    select 1 from public.portal_knowledge_items i
+    where i.id = portal_knowledge_versions.item_id
+      and (i.world_id is null or public.portal_world_visible(i.world_id))
+  ));
+
+create or replace function public.portal_version_item()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.name is distinct from old.name
+     or new.content is distinct from old.content
+     or new.tags is distinct from old.tags then
+    insert into public.portal_knowledge_versions (item_id, name, content, tags, saved_by)
+    values (old.id, old.name, old.content, old.tags, auth.uid());
+  end if;
+  return new;
+end;
+$$;
+
+create trigger portal_items_version before update on public.portal_knowledge_items
+  for each row execute function public.portal_version_item();
+
+insert into public.portal_backup_steps (phase, title, detail, sort_order) values
+('Preparación', 'Elegir la cuenta destino', 'Cuenta independiente, con verificación en dos pasos y teléfono de respaldo. No debe ser la misma cuenta de origen.', 1),
+('Preparación', 'Medir el tamaño y confirmar espacio', 'Revisar uso de Drive y cuota disponible en la cuenta destino antes de copiar.', 2),
+('Preparación', 'Definir el alcance', 'Mi unidad, unidades compartidas, carpetas compartidas conmigo. La papelera se excluye salvo decisión expresa.', 3),
+('Preparación', 'Registrar quién tiene acceso hoy', 'Documentar propietarios, colaboradores y enlaces públicos antes de tocar nada.', 4),
+('Inventario', 'Generar inventario de archivos y carpetas', 'Nombre, ruta, tamaño, tipo, propietario y fecha. Es la base para verificar integridad.', 5),
+('Inventario', 'Listar archivos compartidos y permisos', 'Un archivo puede estar compartido con externos sin que se note desde la carpeta.', 6),
+('Inventario', 'Identificar formatos nativos de Google', 'Docs, Sheets, Slides y Forms no son archivos: deben exportarse para poder copiarse.', 7),
+('Inventario', 'Detectar atajos y enlaces', 'Los atajos no copian el archivo: apuntan a otro. Hay que resolverlos antes de respaldar.', 8),
+('Copia', 'Descargar la copia del origen', 'Con Google Takeout o cliente de escritorio en modo espejo. No mover, renombrar ni borrar en el origen.', 9),
+('Copia', 'Copiar a la cuenta destino', 'Conservar la estructura original de carpetas y nombres. Documentos nativos exportados aparte.', 10),
+('Copia', 'No replicar permisos automáticamente', 'Copiar accesos puede exponer información confidencial. Los permisos se otorgan después.', 11),
+('Verificación', 'Comparar conteos contra el inventario', 'Número de archivos y tamaño por carpeta. Cualquier diferencia se investiga antes de cerrar.', 12),
+('Verificación', 'Abrir muestras por tipo de archivo', 'Validar que los archivos abren y no están truncados ni corruptos.', 13),
+('Verificación', 'Validar exportaciones de Docs y Sheets', 'Confirmar que la versión exportada es legible y conserva lo esencial.', 14),
+('Verificación', 'Registrar huellas de archivos críticos', 'Suma de verificación para los documentos que no admiten pérdida.', 15),
+('Acceso', 'Definir responsables del respaldo', 'Quién puede consultar y quién puede restaurar. No se otorga acceso antes de cerrar la verificación.', 16),
+('Acceso', 'Programar revisión periódica', 'Revisión trimestral del respaldo y prueba de restauración de una carpeta muestra.', 17);

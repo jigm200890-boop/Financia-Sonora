@@ -10,6 +10,7 @@ import {
   FolderPlus,
   Grid2X2,
   Globe2,
+  History,
   Layers,
   List,
   Loader2,
@@ -30,7 +31,9 @@ import {
   useDeleteItem,
   useFolders,
   useKnowledgeItems,
+  useKnowledgeVersions,
   useRenameFolder,
+  useRestoreVersion,
   useSaveDocument,
   useUploadKnowledgeFile,
   useWorlds,
@@ -105,6 +108,9 @@ export default function Conocimiento() {
   const [docTags, setDocTags] = useState("");
   const [preview, setPreview] = useState<KnowledgeItemRow | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [historyItem, setHistoryItem] = useState<KnowledgeItemRow | null>(null);
+  const { data: versions } = useKnowledgeVersions(historyItem?.id);
+  const restoreVersion = useRestoreVersion();
 
   const currentWorld = useMemo(
     () => (worlds ?? []).find((world) => world.id === selectedWorld) ?? null,
@@ -650,6 +656,12 @@ export default function Conocimiento() {
                             <Pencil className="mr-2 h-3.5 w-3.5" />
                             {item.kind === "document" ? "Abrir" : "Ver archivo"}
                           </DropdownMenuItem>
+                          {item.kind === "document" ? (
+                            <DropdownMenuItem onClick={() => setHistoryItem(item)}>
+                              <History className="mr-2 h-3.5 w-3.5" />
+                              Historial
+                            </DropdownMenuItem>
+                          ) : null}
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive"
                             onClick={() => {
@@ -765,6 +777,68 @@ export default function Conocimiento() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!historyItem} onOpenChange={(open) => !open && setHistoryItem(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="truncate">Historial de versiones</DialogTitle>
+            <DialogDescription>
+              {historyItem?.name} · se guarda una versión cada vez que cambia el contenido.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {(versions ?? []).map((version) => (
+              <details
+                key={version.id}
+                className="rounded-md border border-border/70 bg-muted/20 px-3 py-2"
+              >
+                <summary className="cursor-pointer text-xs font-medium text-foreground">
+                  {formatDateTime(version.saved_at)}
+                  <span className="ml-2 text-[10px] font-normal text-muted-foreground">
+                    {version.name}
+                  </span>
+                </summary>
+                <pre className="mt-2 max-h-56 overflow-y-auto whitespace-pre-wrap text-[11px] leading-relaxed text-muted-foreground scrollbar-thin">
+                  {version.content || "Documento vacío."}
+                </pre>
+                {canEdit ? (
+                  <Button
+                    size="xs"
+                    variant="outlineMuted"
+                    className="mt-2"
+                    disabled={restoreVersion.isPending}
+                    onClick={() =>
+                      void restoreVersion
+                        .mutateAsync({
+                          item_id: version.item_id,
+                          name: version.name,
+                          content: version.content,
+                          tags: version.tags,
+                        })
+                        .then(() => {
+                          toast.success("Versión restaurada");
+                          setHistoryItem(null);
+                        })
+                        .catch((error: unknown) =>
+                          toast.error(
+                            error instanceof Error ? error.message : "No se pudo restaurar.",
+                          ),
+                        )
+                    }
+                  >
+                    Restaurar esta versión
+                  </Button>
+                ) : null}
+              </details>
+            ))}
+            {(versions ?? []).length === 0 ? (
+              <p className="px-1 py-4 text-center text-xs text-muted-foreground">
+                Todavía no hay versiones anteriores de este documento.
+              </p>
+            ) : null}
+          </div>
         </DialogContent>
       </Dialog>
 
