@@ -21,6 +21,7 @@ import {
   useDeleteConversation,
   useSaveDocument,
   useSaveTask,
+  useWorlds,
 } from "@/hooks/use-portal-data";
 import { PageHeader } from "@/components/portal/layout-bits";
 import { Button } from "@/components/ui/button";
@@ -57,6 +58,7 @@ const SUGGESTIONS = [
 export default function MatrizIA() {
   const { canEdit } = useAuth();
   const { data: agents } = useAgents();
+  const { data: worlds } = useWorlds();
   const { data: conversations } = useConversations();
   const createConversation = useCreateConversation();
   const deleteConversation = useDeleteConversation();
@@ -71,6 +73,8 @@ export default function MatrizIA() {
   const [disabledAgents, setDisabledAgents] = useState<string[]>([]);
   const [savingMessage, setSavingMessage] = useState<MessageRow | null>(null);
   const [noteName, setNoteName] = useState("");
+  const [noteWorld, setNoteWorld] = useState<string>("none");
+  const [contextWorld, setContextWorld] = useState<string>("none");
 
   const activeAgents = useMemo(
     () =>
@@ -113,12 +117,14 @@ export default function MatrizIA() {
   }
 
   async function knowledgeContext() {
+    if (contextWorld === "none") return "";
     const { data } = await supabase
       .from("portal_knowledge_items")
       .select("name, content")
+      .eq("world_id", contextWorld)
       .not("content", "is", null)
       .order("updated_at", { ascending: false })
-      .limit(3);
+      .limit(4);
     return (data ?? [])
       .map((item) => `### ${item.name}\n${item.content ?? ""}`)
       .join("\n\n")
@@ -244,6 +250,7 @@ export default function MatrizIA() {
     setNoteName(
       `Nota de ${agent?.name ?? "agente"} · ${new Date().toLocaleDateString("es-MX")}`,
     );
+    setNoteWorld(contextWorld !== "none" ? contextWorld : ((worlds ?? [])[0]?.id ?? "none"));
   }
 
   async function confirmSaveNote() {
@@ -254,6 +261,7 @@ export default function MatrizIA() {
         name: noteName.trim() || "Nota del chat",
         content: `${savingMessage.content}\n\n— ${agent?.name ?? "Agente"}, portal de Financia Sonora`,
         folderId: null,
+        worldId: noteWorld === "none" ? null : noteWorld,
       });
       toast.success("Guardado en el conocimiento");
       setSavingMessage(null);
@@ -350,6 +358,24 @@ export default function MatrizIA() {
             Registra agentes en la sección Agentes IA.
           </span>
         ) : null}
+        <div className="ml-auto flex items-center gap-1.5">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Contexto
+          </span>
+          <Select value={contextWorld} onValueChange={setContextWorld}>
+            <SelectTrigger className="h-8 w-[190px] text-[11px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Sin conocimiento</SelectItem>
+              {(worlds ?? []).map((world) => (
+                <SelectItem key={world.id} value={world.id}>
+                  {world.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div
@@ -446,6 +472,19 @@ export default function MatrizIA() {
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"
               placeholder="Título del documento"
             />
+            <Select value={noteWorld} onValueChange={setNoteWorld}>
+              <SelectTrigger>
+                <SelectValue placeholder="Mundo destino" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Sin mundo (sin clasificar)</SelectItem>
+                {(worlds ?? []).map((world) => (
+                  <SelectItem key={world.id} value={world.id}>
+                    {world.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 text-[12px] text-muted-foreground">
               {savingMessage?.content}
             </pre>

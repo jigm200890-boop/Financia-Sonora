@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BookOpen,
   ChevronRight,
@@ -8,8 +8,11 @@ import {
   FolderClosed,
   FolderPlus,
   Grid2X2,
+  Globe2,
+  Layers,
   List,
   Loader2,
+  Lock,
   MoreHorizontal,
   Pencil,
   Plus,
@@ -29,6 +32,7 @@ import {
   useRenameFolder,
   useSaveDocument,
   useUploadKnowledgeFile,
+  useWorlds,
 } from "@/hooks/use-portal-data";
 import { PageHeader } from "@/components/portal/layout-bits";
 import { Button } from "@/components/ui/button";
@@ -73,6 +77,7 @@ function buildPath(folders: FolderRow[], folderId: string): FolderRow[] {
 
 export default function Conocimiento() {
   const { canEdit } = useAuth();
+  const { data: worlds } = useWorlds();
   const { data: folders, isLoading: foldersLoading } = useFolders();
   const { data: items, isLoading: itemsLoading } = useKnowledgeItems();
   const createFolder = useCreateFolder();
@@ -83,6 +88,7 @@ export default function Conocimiento() {
   const uploadFile = useUploadKnowledgeFile();
   const fileInput = useRef<HTMLInputElement>(null);
 
+  const [selectedWorld, setSelectedWorld] = useState<string>(ALL);
   const [selectedFolder, setSelectedFolder] = useState<string>(ALL);
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
@@ -96,9 +102,33 @@ export default function Conocimiento() {
   const [preview, setPreview] = useState<KnowledgeItemRow | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
+  const currentWorld = useMemo(
+    () => (worlds ?? []).find((world) => world.id === selectedWorld) ?? null,
+    [worlds, selectedWorld],
+  );
+
+  const scopedFolders = useMemo(
+    () =>
+      (folders ?? []).filter((folder) =>
+        selectedWorld === ALL ? true : folder.world_id === selectedWorld,
+      ),
+    [folders, selectedWorld],
+  );
+
+  useEffect(() => {
+    setSelectedFolder(ALL);
+  }, [selectedWorld]);
+
   const currentFolder = useMemo(
     () => (folders ?? []).find((folder) => folder.id === selectedFolder) ?? null,
     [folders, selectedFolder],
+  );
+
+  const worldForNewContent = useMemo(
+    () =>
+      currentFolder?.world_id ??
+      (selectedWorld === ALL ? null : selectedWorld),
+    [currentFolder, selectedWorld],
   );
 
   const path = useMemo(() => {
@@ -109,6 +139,7 @@ export default function Conocimiento() {
   const visibleItems = useMemo(() => {
     const term = search.trim().toLowerCase();
     return (items ?? []).filter((item) => {
+      const inWorld = selectedWorld === ALL ? true : item.world_id === selectedWorld;
       const inFolder =
         selectedFolder === ALL
           ? true
@@ -120,9 +151,12 @@ export default function Conocimiento() {
         item.name.toLowerCase().includes(term) ||
         (item.content ?? "").toLowerCase().includes(term) ||
         item.tags.some((tag) => tag.toLowerCase().includes(term));
-      return inFolder && matchesTerm;
+      return inWorld && inFolder && matchesTerm;
     });
-  }, [items, search, selectedFolder]);
+  }, [items, search, selectedFolder, selectedWorld]);
+
+  const worldName = (id: string | null) =>
+    (worlds ?? []).find((world) => world.id === id)?.name ?? "Sin mundo";
 
   function countFor(folderId: string) {
     return (items ?? []).filter((item) => item.folder_id === folderId).length;
@@ -173,6 +207,7 @@ export default function Conocimiento() {
           selectedFolder === ALL || selectedFolder === ROOT
             ? null
             : selectedFolder,
+        worldId: editingItem?.world_id ?? worldForNewContent,
         tags: docTags
           .split(",")
           .map((tag) => tag.trim())
@@ -188,10 +223,15 @@ export default function Conocimiento() {
   async function handleCreateFolder(event: React.FormEvent) {
     event.preventDefault();
     if (!folderName.trim()) return;
+    if (!worldForNewContent) {
+      toast.warning("Elige un mundo antes de crear una carpeta.");
+      return;
+    }
     try {
       const id = await createFolder.mutateAsync({
         name: folderName.trim(),
         parentId: selectedFolder === ALL || selectedFolder === ROOT ? null : selectedFolder,
+        worldId: worldForNewContent,
       });
       setFolderName("");
       setFolderDialog(false);
@@ -205,13 +245,17 @@ export default function Conocimiento() {
   async function handleUpload(files: FileList | null) {
     if (!files || files.length === 0) return;
     const folderId = selectedFolder === ALL || selectedFolder === ROOT ? null : selectedFolder;
+    if (!worldForNewContent) {
+      toast.warning("Elige un mundo antes de subir archivos.");
+      return;
+    }
     try {
       for (const file of Array.from(files)) {
         if (file.size > 20 * 1024 * 1024) {
           toast.error(`${file.name} supera los 20 MB permitidos.`);
           continue;
         }
-        await uploadFile.mutateAsync({ file, folderId });
+        await uploadFile.mutateAsync({ file, folderId, worldId: worldForNewContent });
       }
       toast.success("Archivo subido al conocimiento");
     } catch (error) {
@@ -222,13 +266,19 @@ export default function Conocimiento() {
   }
 
   const breadcrumbLabel =
-    selectedFolder === ALL ? "Todo el conocimiento" : selectedFolder === ROOT ? "Sin carpeta" : null;
+    selectedFolder === ALL
+      ? currentWorld
+        ? "Todo el mundo"
+        : "Todos los mundos"
+      : selectedFolder === ROOT
+        ? "Sin familia"
+        : null;
 
   return (
     <div>
       <PageHeader
         title="Conocimiento"
-        description="Carpetas, documentos y archivos del negocio. Todo queda guardado en el portal, independiente de las conversaciones."
+        description="Mundos independientes, con sus familias, escenarios y expedientes. El mundo personal no se mezcla con los empresariales."
       >
         {canEdit ? (
           <>
@@ -242,7 +292,8 @@ export default function Conocimiento() {
             <Button
               variant="outlineMuted"
               onClick={() => fileInput.current?.click()}
-              disabled={uploadFile.isPending}
+              disabled={uploadFile.isPending || !worldForNewContent}
+              title={worldForNewContent ? undefined : "Elige un mundo primero"}
             >
               {uploadFile.isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -251,11 +302,20 @@ export default function Conocimiento() {
               )}
               Subir archivo
             </Button>
-            <Button variant="outlineMuted" onClick={() => setFolderDialog(true)}>
+            <Button
+              variant="outlineMuted"
+              onClick={() => setFolderDialog(true)}
+              disabled={!worldForNewContent}
+              title={worldForNewContent ? undefined : "Elige un mundo primero"}
+            >
               <FolderPlus className="h-4 w-4" />
               Nueva carpeta
             </Button>
-            <Button onClick={openNewDocument}>
+            <Button
+              onClick={openNewDocument}
+              disabled={!worldForNewContent}
+              title={worldForNewContent ? undefined : "Elige un mundo primero"}
+            >
               <Plus className="h-4 w-4" />
               Nuevo documento
             </Button>
@@ -266,82 +326,143 @@ export default function Conocimiento() {
       <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
         <aside className="panel h-fit p-2">
           <p className="px-2 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-            Carpetas
+            Mundos
           </p>
           <div className="space-y-0.5">
             <button
-              onClick={() => setSelectedFolder(ALL)}
+              onClick={() => setSelectedWorld(ALL)}
               className={cn(
                 "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
-                selectedFolder === ALL
+                selectedWorld === ALL
                   ? "bg-primary/10 text-primary"
                   : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
               )}
             >
-              <BookOpen className="h-3.5 w-3.5" />
-              Todo
+              <Layers className="h-3.5 w-3.5" />
+              Todos los mundos
               <span className="ml-auto text-[10px]">{(items ?? []).length}</span>
             </button>
-            <button
-              onClick={() => setSelectedFolder(ROOT)}
-              className={cn(
-                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
-                selectedFolder === ROOT
-                  ? "bg-primary/10 text-primary"
-                  : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
-              )}
-            >
-              <FolderClosed className="h-3.5 w-3.5" />
-              Sin carpeta
-              <span className="ml-auto text-[10px]">
-                {(items ?? []).filter((item) => !item.folder_id).length}
-              </span>
-            </button>
+            {(worlds ?? []).map((world) => {
+              const active = selectedWorld === world.id;
+              const count = (items ?? []).filter((item) => item.world_id === world.id).length;
+              return (
+                <button
+                  key={world.id}
+                  onClick={() => setSelectedWorld(world.id)}
+                  title={world.description ?? undefined}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
+                    active
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                  )}
+                >
+                  {world.visibility === "owner" ? (
+                    <Lock className="h-3.5 w-3.5" />
+                  ) : (
+                    <Globe2 className="h-3.5 w-3.5" />
+                  )}
+                  <span className="truncate">{world.name}</span>
+                  <span className="ml-auto shrink-0 text-[10px]">{count}</span>
+                </button>
+              );
+            })}
+          </div>
 
-            {foldersLoading ? (
-              <div className="space-y-1 px-1 py-1">
-                <Skeleton className="h-6" />
-                <Skeleton className="h-6" />
+          <div className="mt-3 border-t border-border/60 pt-2">
+            <p className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Familias y carpetas
+            </p>
+
+            {selectedWorld === ALL ? (
+              <p className="px-2 py-3 text-[11px] leading-relaxed text-muted-foreground">
+                Elige un mundo para ver sus familias, escenarios y expedientes.
+              </p>
+            ) : (
+              <div className="space-y-0.5">
+                <button
+                  onClick={() => setSelectedFolder(ALL)}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
+                    selectedFolder === ALL
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                  )}
+                >
+                  <BookOpen className="h-3.5 w-3.5" />
+                  Todo el mundo
+                  <span className="ml-auto text-[10px]">
+                    {(items ?? []).filter((item) => item.world_id === selectedWorld).length}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setSelectedFolder(ROOT)}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors",
+                    selectedFolder === ROOT
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+                  )}
+                >
+                  <FolderClosed className="h-3.5 w-3.5" />
+                  Sin familia
+                  <span className="ml-auto text-[10px]">
+                    {(items ?? []).filter(
+                      (item) => !item.folder_id && item.world_id === selectedWorld,
+                    ).length}
+                  </span>
+                </button>
+
+                {foldersLoading ? (
+                  <div className="space-y-1 px-1 py-1">
+                    <Skeleton className="h-6" />
+                    <Skeleton className="h-6" />
+                  </div>
+                ) : null}
+
+                <FolderTree
+                  folders={scopedFolders}
+                  parentId={null}
+                  depth={0}
+                  selectedId={selectedFolder}
+                  onSelect={setSelectedFolder}
+                  countFor={countFor}
+                  canEdit={canEdit}
+                  onRename={(folder) => {
+                    const next = window.prompt("Nuevo nombre de la carpeta", folder.name);
+                    if (next && next.trim()) {
+                      void renameFolder
+                        .mutateAsync({ id: folder.id, name: next.trim() })
+                        .then(() => toast.success("Carpeta renombrada"))
+                        .catch((error: unknown) =>
+                          toast.error(
+                            error instanceof Error ? error.message : "No se pudo renombrar.",
+                          ),
+                        );
+                    }
+                  }}
+                  onDelete={(folder) => {
+                    if (
+                      window.confirm(
+                        `¿Eliminar la carpeta "${folder.name}" con su contenido? Esta acción no se puede deshacer.`,
+                      )
+                    ) {
+                      void deleteFolder
+                        .mutateAsync(folder.id)
+                        .then(() => {
+                          setSelectedFolder(ALL);
+                          toast.success("Carpeta eliminada");
+                        })
+                        .catch((error: unknown) =>
+                          toast.error(
+                            error instanceof Error ? error.message : "No se pudo eliminar.",
+                          ),
+                        );
+                    }
+                  }}
+                />
               </div>
-            ) : null}
-
-            <FolderTree
-              folders={folders ?? []}
-              parentId={null}
-              depth={0}
-              selectedId={selectedFolder}
-              onSelect={setSelectedFolder}
-              countFor={countFor}
-              canEdit={canEdit}
-              onRename={(folder) => {
-                const next = window.prompt("Nuevo nombre de la carpeta", folder.name);
-                if (next && next.trim()) {
-                  void renameFolder
-                    .mutateAsync({ id: folder.id, name: next.trim() })
-                    .then(() => toast.success("Carpeta renombrada"))
-                    .catch((error: unknown) =>
-                      toast.error(error instanceof Error ? error.message : "No se pudo renombrar."),
-                    );
-                }
-              }}
-              onDelete={(folder) => {
-                if (
-                  window.confirm(
-                    `¿Eliminar la carpeta "${folder.name}" con su contenido? Esta acción no se puede deshacer.`,
-                  )
-                ) {
-                  void deleteFolder
-                    .mutateAsync(folder.id)
-                    .then(() => {
-                      setSelectedFolder(ALL);
-                      toast.success("Carpeta eliminada");
-                    })
-                    .catch((error: unknown) =>
-                      toast.error(error instanceof Error ? error.message : "No se pudo eliminar."),
-                    );
-                }
-              }}
-            />
+            )}
           </div>
         </aside>
 
@@ -349,11 +470,20 @@ export default function Conocimiento() {
           <div className="panel mb-4 flex flex-col gap-2 p-2 sm:flex-row sm:items-center">
             <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto px-1 py-1 text-xs text-muted-foreground scrollbar-thin">
               <button
-                onClick={() => setSelectedFolder(ALL)}
+                onClick={() => {
+                  setSelectedWorld(ALL);
+                  setSelectedFolder(ALL);
+                }}
                 className="shrink-0 rounded px-1.5 py-0.5 hover:bg-muted/60 hover:text-foreground"
               >
                 Conocimiento
               </button>
+              {currentWorld ? (
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <ChevronRight className="h-3 w-3" />
+                  <span className="px-1.5 text-foreground">{currentWorld.name}</span>
+                </span>
+              ) : null}
               {path.map((folder) => (
                 <span key={folder.id} className="flex shrink-0 items-center gap-1.5">
                   <ChevronRight className="h-3 w-3" />
@@ -472,13 +602,16 @@ export default function Conocimiento() {
                       )}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium text-foreground">
+                      <span className="line-clamp-2 text-sm font-medium leading-snug text-foreground">
                         {item.name}
                       </span>
                       <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
                         {formatDateTime(item.updated_at)}
                         {item.size_bytes ? ` · ${formatBytes(item.size_bytes)}` : ""}
                         {item.tags.length > 0 ? ` · ${item.tags.join(", ")}` : ""}
+                        {selectedWorld === ALL && item.world_id
+                          ? ` · ${worldName(item.world_id)}`
+                          : ""}
                       </span>
                       {view === "grid" && item.content ? (
                         <span className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground/80">
@@ -551,7 +684,7 @@ export default function Conocimiento() {
             <DialogDescription>
               {selectedFolder === ALL || selectedFolder === ROOT
                 ? "Se creará en la raíz del conocimiento."
-                : `Se creará dentro de "${currentFolder?.name ?? "carpeta"}".`}
+                : `Se creará dentro de "${currentFolder?.name ?? "la familia seleccionada"}".`}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateFolder} className="space-y-4">

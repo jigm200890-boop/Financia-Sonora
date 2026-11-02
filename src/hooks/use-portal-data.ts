@@ -14,6 +14,7 @@ import {
   type ProfileRow,
   type Role,
   type TaskRow,
+  type WorldRow,
   type WorkflowRow,
   type WorkflowStep,
 } from "@/lib/portal-types";
@@ -23,6 +24,7 @@ const ROOT = "portal";
 export const qk = {
   apps: [ROOT, "apps"],
   agents: [ROOT, "agents"],
+  worlds: [ROOT, "worlds"],
   folders: [ROOT, "folders"],
   items: [ROOT, "items"],
   tasks: [ROOT, "tasks"],
@@ -205,6 +207,20 @@ export function useDeleteAgent() {
 
 /* ----------------------------------------------------------- knowledge */
 
+export function useWorlds() {
+  return useQuery({
+    queryKey: qk.worlds,
+    queryFn: async (): Promise<WorldRow[]> => {
+      const { data, error } = await supabase
+        .from("portal_worlds")
+        .select("*")
+        .order("sort_order", { ascending: true });
+      fail(error);
+      return data ?? [];
+    },
+  });
+}
+
 export function useFolders() {
   return useQuery({
     queryKey: qk.folders,
@@ -222,10 +238,18 @@ export function useFolders() {
 export function useCreateFolder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { name: string; parentId: string | null }) => {
+    mutationFn: async (input: {
+      name: string;
+      parentId: string | null;
+      worldId: string | null;
+    }) => {
       const { data, error } = await supabase
         .from("portal_knowledge_folders")
-        .insert({ name: input.name, parent_id: input.parentId })
+        .insert({
+          name: input.name,
+          parent_id: input.parentId,
+          world_id: input.worldId,
+        })
         .select("id")
         .single();
       fail(error);
@@ -288,6 +312,7 @@ export function useSaveDocument() {
       name: string;
       content: string;
       folderId: string | null;
+      worldId: string | null;
       tags?: string[];
     }) => {
       if (input.id) {
@@ -297,6 +322,7 @@ export function useSaveDocument() {
             name: input.name,
             content: input.content,
             folder_id: input.folderId,
+            world_id: input.worldId,
             tags: input.tags ?? [],
           })
           .eq("id", input.id);
@@ -307,6 +333,7 @@ export function useSaveDocument() {
         name: input.name,
         content: input.content,
         folder_id: input.folderId,
+        world_id: input.worldId,
         kind: "document",
         tags: input.tags ?? [],
       });
@@ -336,7 +363,11 @@ export function useDeleteItem() {
 export function useUploadKnowledgeFile() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { file: File; folderId: string | null }) => {
+    mutationFn: async (input: {
+      file: File;
+      folderId: string | null;
+      worldId: string | null;
+    }) => {
       const ext = input.file.name.split(".").pop()?.toLowerCase() ?? "bin";
       const path = `knowledge/${input.folderId ?? "root"}/${crypto.randomUUID()}.${ext}`;
       const { error: uploadError } = await supabase.storage
@@ -350,6 +381,7 @@ export function useUploadKnowledgeFile() {
       const { error } = await supabase.from("portal_knowledge_items").insert({
         name: input.file.name,
         folder_id: input.folderId,
+        world_id: input.worldId,
         kind: "file",
         storage_path: path,
         mime_type: input.file.type || null,

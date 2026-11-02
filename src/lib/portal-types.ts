@@ -10,6 +10,7 @@ export type AgentRow = Tables["portal_agents"]["Row"];
 export type AgentInsert = Tables["portal_agents"]["Insert"];
 export type ConversationRow = Tables["portal_conversations"]["Row"];
 export type MessageRow = Tables["portal_messages"]["Row"];
+export type WorldRow = Tables["portal_worlds"]["Row"];
 export type FolderRow = Tables["portal_knowledge_folders"]["Row"];
 export type KnowledgeItemRow = Tables["portal_knowledge_items"]["Row"];
 export type TaskRow = Tables["portal_tasks"]["Row"];
@@ -27,5 +28,6 @@ export type Role = "admin" | "editor" | "viewer";
 export type AppStatus = "active" | "unverified" | "pending" | "offline" | "unpublished";
 export type TaskStatus = "pendiente" | "en_curso" | "bloqueada" | "hecha";
 export type CheckResult = "reachable" | "auth_required" | "unavailable";
+export type WorldKind = "personal" | "empresa" | "proyecto" | "tecnologia" | "biblioteca";
 
 export const KNOWLEDGE_BUCKET = "portal-knowledge";

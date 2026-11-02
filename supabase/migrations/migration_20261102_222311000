@@ -1,0 +1,8 @@
+update public.portal_knowledge_folders
+set world_id = (select id from public.portal_worlds where name = 'Núcleo Central')
+where name = 'Agentes IA'
+  and world_id = (select id from public.portal_worlds where name = 'Financia Sonora');
+
+insert into public.portal_knowledge_folders (name, parent_id, world_id) values
+('Marketing y ventas', null, (select id from public.portal_worlds where name = 'Biblioteca profesional')),
+('Administración', null, (select id from public.portal_worlds where name = 'Biblioteca profesional'));
