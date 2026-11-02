@@ -23,6 +23,7 @@ import {
   Target,
   Trash2,
   TriangleAlert,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -121,6 +122,12 @@ export default function NucleoCentral() {
   const [error, setError] = useState<string | null>(null);
   const [objectiveDialog, setObjectiveDialog] = useState(false);
   const [editingObjective, setEditingObjective] = useState<ObjectiveRow | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importForm, setImportForm] = useState({
+    source: "ChatGPT",
+    title: "",
+    content: "",
+  });
   const [agreementDialog, setAgreementDialog] = useState(false);
   const [editingAgreement, setEditingAgreement] = useState<AgreementRow | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -354,6 +361,14 @@ export default function NucleoCentral() {
                   contexto Núcleo Central
                 </p>
               </div>
+              <Button
+                size="xs"
+                variant="outlineMuted"
+                onClick={() => setImportOpen(true)}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                Importar
+              </Button>
               <span className="inline-flex items-center gap-1.5 rounded-full border border-success/40 bg-success/10 px-2 py-0.5 text-[10px] text-success">
                 <span className="h-1.5 w-1.5 rounded-full bg-success" />
                 Privado
@@ -961,6 +976,94 @@ export default function NucleoCentral() {
       ) : null}
 
       {tab === "limites" ? <LimitsPanel openTasks={openTasks.length} /> : null}
+
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Importar conversación externa</DialogTitle>
+            <DialogDescription>
+              Pega la conversación de ChatGPT, Claude o Base44. Se guarda como documento del Núcleo
+              Central y Atlas puede usarla como contexto.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>Origen</Label>
+                <Select
+                  value={importForm.source}
+                  onValueChange={(value) => setImportForm({ ...importForm, source: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ChatGPT">ChatGPT</SelectItem>
+                    <SelectItem value="Claude">Claude</SelectItem>
+                    <SelectItem value="Base44">Base44</SelectItem>
+                    <SelectItem value="Otro">Otro</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="import-title">Título</Label>
+                <Input
+                  id="import-title"
+                  value={importForm.title}
+                  onChange={(event) =>
+                    setImportForm({ ...importForm, title: event.target.value })
+                  }
+                  placeholder="Conversación sobre estructura de crédito"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="import-content">Conversación</Label>
+              <Textarea
+                id="import-content"
+                value={importForm.content}
+                onChange={(event) =>
+                  setImportForm({ ...importForm, content: event.target.value })
+                }
+                rows={10}
+                className="font-mono text-[12px]"
+                placeholder="Pega aquí el texto completo…"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setImportOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={saveDocument.isPending || !importForm.content.trim()}
+              onClick={() => {
+                void saveDocument
+                  .mutateAsync({
+                    name: `${importForm.title.trim() || "Conversación externa"} · ${importForm.source}`,
+                    content: importForm.content,
+                    folderId: null,
+                    worldId: coreWorld?.id ?? null,
+                    tags: ["conversación externa", importForm.source],
+                  })
+                  .then(() => {
+                    toast.success("Conversación registrada en el Núcleo Central");
+                    setImportOpen(false);
+                    setImportForm({ source: importForm.source, title: "", content: "" });
+                  })
+                  .catch((caught: unknown) =>
+                    toast.error(
+                      caught instanceof Error ? caught.message : "No se pudo guardar.",
+                    ),
+                  );
+              }}
+            >
+              {saveDocument.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Guardar conversación
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <ObjectiveDialog
         open={objectiveDialog}
