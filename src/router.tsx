@@ -1,6 +1,7 @@
 import { PortalShell } from "./components/portal/portal-shell";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import NucleoCentral from "./pages/NucleoCentral";
 import Aplicaciones from "./pages/Aplicaciones";
 import Nucleos from "./pages/Nucleos";
 import Agentes from "./pages/Agentes";
@@ -24,6 +25,7 @@ export const routers = [
     element: <PortalShell />,
     children: [
       { index: true, name: "home", element: <Dashboard /> },
+      { path: "nucleo", name: "nucleo", element: <NucleoCentral /> },
       { path: "aplicaciones", name: "aplicaciones", element: <Aplicaciones /> },
       { path: "nucleos", name: "nucleos", element: <Nucleos /> },
       { path: "agentes", name: "agentes", element: <Agentes /> },

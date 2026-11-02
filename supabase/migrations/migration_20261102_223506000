@@ -1,0 +1,1 @@
+update public.portal_profiles set role = 'admin' where id = 'e76bb07b-fed4-4797-b7c8-dbf6b3a54aa5';

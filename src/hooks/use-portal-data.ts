@@ -11,6 +11,8 @@ import {
   type IntegrationRow,
   type KnowledgeItemRow,
   type MessageRow,
+  type ObjectiveRow,
+  type AgreementRow,
   type ProfileRow,
   type Role,
   type TaskRow,
@@ -33,6 +35,9 @@ export const qk = {
   profiles: [ROOT, "profiles"],
   logs: [ROOT, "logs"],
   conversations: [ROOT, "conversations"],
+  coreConversation: [ROOT, "core-conversation"],
+  objectives: [ROOT, "objectives"],
+  agreements: [ROOT, "agreements"],
   messages: (id: string) => [ROOT, "messages", id],
 };
 
@@ -476,6 +481,143 @@ export async function insertMessage(input: {
     content: input.content,
   });
   fail(error);
+}
+
+/* -------------------------------------------------- núcleo central */
+
+export function useCoreConversation() {
+  return useQuery({
+    queryKey: qk.coreConversation,
+    queryFn: async (): Promise<ConversationRow | null> => {
+      const { data, error } = await supabase
+        .from("portal_conversations")
+        .select("*")
+        .eq("scope", "core")
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      fail(error);
+      return data ?? null;
+    },
+  });
+}
+
+export function useObjectives() {
+  return useQuery({
+    queryKey: qk.objectives,
+    queryFn: async (): Promise<ObjectiveRow[]> => {
+      const { data, error } = await supabase
+        .from("portal_objectives")
+        .select("*")
+        .order("created_at", { ascending: true });
+      fail(error);
+      return data ?? [];
+    },
+  });
+}
+
+export function useSaveObjective() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      id?: string;
+      values: {
+        title: string;
+        description?: string | null;
+        horizon: string;
+        status: string;
+        progress: number;
+        due_date?: string | null;
+        world_id?: string | null;
+      };
+    }) => {
+      if (input.id) {
+        const { error } = await supabase
+          .from("portal_objectives")
+          .update(input.values)
+          .eq("id", input.id);
+        fail(error);
+        return;
+      }
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from("portal_objectives")
+        .insert({ ...input.values, created_by: user?.id ?? null });
+      fail(error);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.objectives }),
+  });
+}
+
+export function useDeleteObjective() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("portal_objectives").delete().eq("id", id);
+      fail(error);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.objectives }),
+  });
+}
+
+export function useAgreements() {
+  return useQuery({
+    queryKey: qk.agreements,
+    queryFn: async (): Promise<AgreementRow[]> => {
+      const { data, error } = await supabase
+        .from("portal_agreements")
+        .select("*")
+        .order("decided_at", { ascending: false });
+      fail(error);
+      return data ?? [];
+    },
+  });
+}
+
+export function useSaveAgreement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      id?: string;
+      values: {
+        title: string;
+        decision?: string | null;
+        status: string;
+        decided_at: string;
+        world_id?: string | null;
+      };
+    }) => {
+      if (input.id) {
+        const { error } = await supabase
+          .from("portal_agreements")
+          .update(input.values)
+          .eq("id", input.id);
+        fail(error);
+        return;
+      }
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from("portal_agreements")
+        .insert({ ...input.values, created_by: user?.id ?? null });
+      fail(error);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.agreements }),
+  });
+}
+
+export function useDeleteAgreement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("portal_agreements").delete().eq("id", id);
+      fail(error);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.agreements }),
+  });
 }
 
 /* --------------------------------------------------------------- tasks */

@@ -3408,6 +3408,49 @@ export type Database = {
         }
         Relationships: []
       }
+      portal_agreements: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          decided_at: string
+          decision: string | null
+          id: string
+          status: string
+          title: string
+          updated_at: string
+          world_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          decided_at?: string
+          decision?: string | null
+          id?: string
+          status?: string
+          title: string
+          updated_at?: string
+          world_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          decided_at?: string
+          decision?: string | null
+          id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          world_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_agreements_world_id_fkey"
+            columns: ["world_id"]
+            referencedRelation: "portal_worlds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       portal_apps: {
         Row: {
           app_url: string | null
@@ -3510,6 +3553,7 @@ export type Database = {
           created_by: string | null
           id: string
           mode: string
+          scope: string
           session_id: string
           title: string
           updated_at: string
@@ -3519,6 +3563,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           mode?: string
+          scope?: string
           session_id?: string
           title?: string
           updated_at?: string
@@ -3528,6 +3573,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           mode?: string
+          scope?: string
           session_id?: string
           title?: string
           updated_at?: string
@@ -3713,6 +3759,55 @@ export type Database = {
             foreignKeyName: "portal_messages_conversation_id_fkey"
             columns: ["conversation_id"]
             referencedRelation: "portal_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portal_objectives: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          due_date: string | null
+          horizon: string
+          id: string
+          progress: number
+          status: string
+          title: string
+          updated_at: string
+          world_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          horizon?: string
+          id?: string
+          progress?: number
+          status?: string
+          title: string
+          updated_at?: string
+          world_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          due_date?: string | null
+          horizon?: string
+          id?: string
+          progress?: number
+          status?: string
+          title?: string
+          updated_at?: string
+          world_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_objectives_world_id_fkey"
+            columns: ["world_id"]
+            referencedRelation: "portal_worlds"
             referencedColumns: ["id"]
           },
         ]

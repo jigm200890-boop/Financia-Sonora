@@ -1,0 +1,107 @@
+-- Núcleo Central: acuerdos, objetivos y espacio privado
+create table if not exists public.portal_objectives (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  description text,
+  horizon text not null default 'corto' check (horizon in ('corto','medio','largo')),
+  status text not null default 'activo' check (status in ('activo','pausado','logrado')),
+  progress integer not null default 0 check (progress between 0 and 100),
+  due_date date,
+  world_id uuid references public.portal_worlds(id) on delete set null,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.portal_agreements (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  decision text,
+  status text not null default 'propuesta' check (status in ('propuesta','acordado','en_vigor','descartado')),
+  decided_at date not null default current_date,
+  world_id uuid references public.portal_worlds(id) on delete set null,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create trigger portal_objectives_touch before update on public.portal_objectives
+  for each row execute function public.portal_touch_updated_at();
+create trigger portal_agreements_touch before update on public.portal_agreements
+  for each row execute function public.portal_touch_updated_at();
+
+alter table public.portal_objectives enable row level security;
+alter table public.portal_agreements enable row level security;
+
+create policy portal_objectives_admin_read on public.portal_objectives for select to authenticated
+  using (public.portal_is_admin());
+create policy portal_objectives_admin_insert on public.portal_objectives for insert to authenticated
+  with check (public.portal_is_admin());
+create policy portal_objectives_admin_update on public.portal_objectives for update to authenticated
+  using (public.portal_is_admin()) with check (public.portal_is_admin());
+create policy portal_objectives_admin_delete on public.portal_objectives for delete to authenticated
+  using (public.portal_is_admin());
+
+create policy portal_agreements_admin_read on public.portal_agreements for select to authenticated
+  using (public.portal_is_admin());
+create policy portal_agreements_admin_insert on public.portal_agreements for insert to authenticated
+  with check (public.portal_is_admin());
+create policy portal_agreements_admin_update on public.portal_agreements for update to authenticated
+  using (public.portal_is_admin()) with check (public.portal_is_admin());
+create policy portal_agreements_admin_delete on public.portal_agreements for delete to authenticated
+  using (public.portal_is_admin());
+
+alter table public.portal_conversations
+  add column if not exists scope text not null default 'matrix' check (scope in ('matrix','core'));
+
+alter policy portal_conversations_read on public.portal_conversations
+  using (scope = 'matrix' or public.portal_is_admin());
+alter policy portal_conversations_insert on public.portal_conversations
+  with check (public.portal_can_edit() and (scope <> 'core' or public.portal_is_admin()));
+alter policy portal_conversations_update on public.portal_conversations
+  using (public.portal_can_edit() and (scope <> 'core' or public.portal_is_admin()))
+  with check (public.portal_can_edit() and (scope <> 'core' or public.portal_is_admin()));
+alter policy portal_conversations_delete on public.portal_conversations
+  using (public.portal_can_edit() and (scope <> 'core' or public.portal_is_admin()));
+
+alter policy portal_messages_read on public.portal_messages
+  using (exists (
+    select 1 from public.portal_conversations c
+    where c.id = portal_messages.conversation_id
+      and (c.scope = 'matrix' or public.portal_is_admin())
+  ));
+alter policy portal_messages_insert on public.portal_messages
+  with check (
+    public.portal_can_edit()
+    and exists (
+      select 1 from public.portal_conversations c
+      where c.id = portal_messages.conversation_id
+        and (c.scope = 'matrix' or public.portal_is_admin())
+    )
+  );
+alter policy portal_messages_delete on public.portal_messages
+  using (
+    public.portal_can_edit()
+    and exists (
+      select 1 from public.portal_conversations c
+      where c.id = portal_messages.conversation_id
+        and (c.scope = 'matrix' or public.portal_is_admin())
+    )
+  );
+
+insert into public.portal_agents (name, provider, model, protocol, description, responsibilities, tools, uses_knowledge, status, accent, sort_order)
+values ('Atlas', 'GLM', 'z-ai/glm-5.2', 'openai_chat_completions', 'Dirección estratégica y coordinación del Núcleo Central.', 'Ordenar prioridades, detectar bloqueos, proponer decisiones y dar seguimiento a los acuerdos del portal.', array['Chat','Conocimiento','Tareas','Coordinación'], true, 'active', 'violet', 0)
+on conflict do nothing;
+
+insert into public.portal_conversations (title, mode, scope, session_id, created_by)
+values ('Mesa privada — Atlas', 'single', 'core', gen_random_uuid()::text, 'd95aed2b-142f-408f-a12e-b95477b7e624');
+
+insert into public.portal_objectives (title, description, horizon, status, progress, world_id, created_by) values
+('Convertir el portal en el Núcleo Central de operaciones', 'Base privada de trabajo: conversación con Atlas, acuerdos, objetivos, tareas y documentación en un solo lugar.', 'corto', 'activo', 35, (select id from public.portal_worlds where name = 'Núcleo Central'), 'd95aed2b-142f-408f-a12e-b95477b7e624'),
+('Coordinar ChatGPT, Claude y Base44 bajo un mismo criterio', 'Cada plataforma recibe el mismo brief y devuelve propuestas que se registran como acuerdos o tareas.', 'corto', 'activo', 10, (select id from public.portal_worlds where name = 'Núcleo Central'), 'd95aed2b-142f-408f-a12e-b95477b7e624'),
+('Ordenar el ecosistema en cuatro pilares empresariales', 'Definir los cuatro pilares y asignar aplicaciones, agentes y documentos a cada uno.', 'medio', 'pausado', 0, (select id from public.portal_worlds where name = 'Núcleo Central'), 'd95aed2b-142f-408f-a12e-b95477b7e624');
+
+insert into public.portal_agreements (title, decision, status, decided_at, world_id, created_by) values
+('Se conserva el portal actual como base', 'No se reconstruye la infraestructura: se amplía el Portal de Acceso Único como Núcleo Central.', 'en_vigor', current_date, (select id from public.portal_worlds where name = 'Núcleo Central'), 'd95aed2b-142f-408f-a12e-b95477b7e624'),
+('Separación absoluta de mundos', 'El expediente personal nunca se mezcla con los empresariales; la separación se aplica en el servidor.', 'en_vigor', current_date, (select id from public.portal_worlds where name = 'Núcleo Central'), 'd95aed2b-142f-408f-a12e-b95477b7e624'),
+('Los cuatro pilares vendrán después del Núcleo Central', 'Primero la base de operaciones; después el resto del ecosistema.', 'acordado', current_date, (select id from public.portal_worlds where name = 'Núcleo Central'), 'd95aed2b-142f-408f-a12e-b95477b7e624');

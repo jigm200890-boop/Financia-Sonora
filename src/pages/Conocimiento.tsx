@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   BookOpen,
   ChevronRight,
@@ -77,6 +78,7 @@ function buildPath(folders: FolderRow[], folderId: string): FolderRow[] {
 
 export default function Conocimiento() {
   const { canEdit } = useAuth();
+  const [searchParams] = useSearchParams();
   const { data: worlds } = useWorlds();
   const { data: folders, isLoading: foldersLoading } = useFolders();
   const { data: items, isLoading: itemsLoading } = useKnowledgeItems();
@@ -88,7 +90,9 @@ export default function Conocimiento() {
   const uploadFile = useUploadKnowledgeFile();
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const [selectedWorld, setSelectedWorld] = useState<string>(ALL);
+  const [selectedWorld, setSelectedWorld] = useState<string>(
+    searchParams.get("world") ?? ALL,
+  );
   const [selectedFolder, setSelectedFolder] = useState<string>(ALL);
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");

@@ -3,6 +3,7 @@ import {
   Bot,
   Cpu,
   GitBranch,
+  Hexagon,
   Home,
   LayoutGrid,
   Link2,
@@ -28,6 +29,12 @@ export const NAV_ITEMS: NavItem[] = [
     description: "Vista general de todo el ecosistema",
     icon: Home,
     end: true,
+  },
+  {
+    to: "/nucleo",
+    label: "Núcleo Central",
+    description: "Mesa privada, acuerdos, objetivos y coordinación",
+    icon: Hexagon,
   },
   {
     to: "/aplicaciones",
