@@ -154,30 +154,91 @@ export default function MatrizIA() {
     });
   }
 
-  async function knowledgeContext(query: string) {
-    if (contextWorld === "none") return "";
+  async function knowledgeContext(query: string, agent: AgentRow) {
+    const blocks: string[] = [];
+    const worldLabel = (id: string | null) =>
+      (worlds ?? []).find((world) => world.id === id)?.name ?? "Mundo";
+    let contextIds: string[] = [];
 
-    const { data: hits } = await supabase.rpc("portal_search_documents", {
-      p_query: query,
-      p_world_id: contextWorld,
-      p_limit: 4,
-      p_item_ids: null,
-    });
-    const fragments = ((hits ?? []) as Array<{ name: string; snippet: string }>)
-      .map((hit) => `### ${hit.name}\n${hit.snippet}`)
-      .join("\n\n");
-    if (fragments) return fragments;
+    if (contextWorld !== "none") {
+      const { data: hits } = await supabase.rpc("portal_search_documents", {
+        p_query: query,
+        p_world_id: contextWorld,
+        p_limit: 4,
+        p_item_ids: null,
+      });
+      const fragments = (
+        (hits ?? []) as Array<{ id: string; name: string; snippet: string; world_id: string | null }>
+      )
+        .map((hit) => `### ${worldLabel(hit.world_id)} · ${hit.name}\n${hit.snippet}`)
+        .join("\n\n");
 
-    const { data } = await supabase
-      .from("portal_knowledge_items")
-      .select("name, content")
-      .eq("world_id", contextWorld)
-      .not("content", "is", null)
-      .order("updated_at", { ascending: false })
-      .limit(2);
-    return (data ?? [])
-      .map((item) => `### ${item.name}\n${(item.content ?? "").slice(0, 700)}`)
-      .join("\n\n");
+      if (fragments) {
+        blocks.push(fragments);
+        contextIds = ((hits ?? []) as Array<{ id: string }>).map((hit) => hit.id);
+      } else {
+        const { data } = await supabase
+          .from("portal_knowledge_items")
+          .select("name, content")
+          .eq("world_id", contextWorld)
+          .not("content", "is", null)
+          .order("updated_at", { ascending: false })
+          .limit(2);
+        const recent = (data ?? [])
+          .map(
+            (item) =>
+              `### ${worldLabel(contextWorld)} · ${item.name}\n${(item.content ?? "").slice(0, 700)}`,
+          )
+          .join("\n\n");
+        if (recent) blocks.push(recent);
+      }
+    }
+
+    const { data: granted } = await supabase
+      .from("portal_document_grants")
+      .select("item_id")
+      .eq("subject_type", "agent")
+      .eq("subject_id", agent.id)
+      .is("revoked_at", null);
+
+    const grantedIds = Array.from(new Set((granted ?? []).map((row) => row.item_id))).filter(
+      (id) => !contextIds.includes(id),
+    );
+
+    if (grantedIds.length > 0) {
+      const { data: grantedHits } = await supabase.rpc("portal_search_documents", {
+        p_query: query,
+        p_world_id: null,
+        p_limit: 4,
+        p_item_ids: grantedIds,
+      });
+      const grantedFragments = (
+        (grantedHits ?? []) as Array<{ name: string; snippet: string; world_id: string | null }>
+      )
+        .map((hit) => `### ${worldLabel(hit.world_id)} · ${hit.name}\n${hit.snippet}`)
+        .join("\n\n");
+
+      if (grantedFragments) {
+        blocks.push(`DOCUMENTOS AUTORIZADOS PARA ${agent.name}\n${grantedFragments}`);
+      } else {
+        const { data: titles } = await supabase
+          .from("portal_knowledge_items")
+          .select("name, world_id")
+          .in("id", grantedIds)
+          .limit(6);
+        if ((titles ?? []).length > 0) {
+          blocks.push(
+            `Documentos autorizados para ${agent.name} sin coincidencia para esta consulta: ${(
+              titles ?? []
+            )
+              .map((item) => `${worldLabel(item.world_id)} · ${item.name}`)
+              .join("; ")}`,
+          );
+        }
+      }
+    }
+
+    return blocks.join("\n\n");
   }
 
   async function ensureConversation(firstMessage: string) {
@@ -216,7 +277,6 @@ export default function MatrizIA() {
       content,
     }).catch(() => toast.error("No se pudo guardar tu mensaje en el historial."));
 
-    const knowledge = await knowledgeContext(content);
     const targets = [...activeAgents];
     setPending(Object.fromEntries(targets.map((agent) => [agent.id, true])));
     setErrors({});
