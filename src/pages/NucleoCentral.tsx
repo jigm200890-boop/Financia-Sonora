@@ -149,6 +149,9 @@ export default function NucleoCentral() {
   const [editingAgreement, setEditingAgreement] = useState<AgreementRow | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
 
+  const worldName = (id: string | null) =>
+    (worlds ?? []).find((world) => world.id === id)?.name ?? "Mundo";
+
   const coreWorld = useMemo(
     () => (worlds ?? []).find((world) => world.name === "Núcleo Central") ?? null,
     [worlds],
@@ -351,8 +354,16 @@ export default function NucleoCentral() {
           p_limit: 4,
           p_item_ids: null,
         });
-        let documents = ((hits ?? []) as Array<{ name: string; snippet: string }>)
-          .map((hit) => `### ${hit.name}\n${hit.snippet}`)
+        const coreHits = (hits ?? []) as Array<{
+          id: string;
+          name: string;
+          snippet: string;
+          world_id: string | null;
+        }>;
+        const coreIds = coreHits.map((hit) => hit.id);
+
+        let documents = coreHits
+          .map((hit) => `### ${worldName(hit.world_id)} · ${hit.name}\n${hit.snippet}`)
           .join("\n\n");
 
         if (!documents) {
@@ -364,9 +375,10 @@ export default function NucleoCentral() {
             .order("updated_at", { ascending: false })
             .limit(2);
           documents = (recent ?? [])
-            .map((item) => `### ${item.name}\n${(item.content ?? "").slice(0, 700)}`)
+            .map((item) => `### ${worldName(coreWorld.id)} · ${item.name}\n${(item.content ?? "").slice(0, 700)}`)
             .join("\n\n");
         }
+
         let grantedDocs = "";
         if (atlas) {
           const { data: granted } = await supabase
@@ -375,17 +387,37 @@ export default function NucleoCentral() {
             .eq("subject_type", "agent")
             .eq("subject_id", atlas.id)
             .is("revoked_at", null);
-          const grantedIds = (granted ?? []).map((row) => row.item_id);
+          const grantedIds = Array.from(
+            new Set((granted ?? []).map((row) => row.item_id)),
+          ).filter((id) => !coreIds.includes(id));
+
           if (grantedIds.length > 0) {
-            const { data: grantedItems } = await supabase
-              .from("portal_knowledge_items")
-              .select("name, content")
-              .in("id", grantedIds)
-              .not("content", "is", null)
-              .limit(5);
-            grantedDocs = (grantedItems ?? [])
-              .map((item) => `### ${item.name}\n${item.content ?? ""}`)
+            const { data: grantedHits } = await supabase.rpc("portal_search_documents", {
+              p_query: content,
+              p_world_id: null,
+              p_limit: 4,
+              p_item_ids: grantedIds,
+            });
+            grantedDocs = ((grantedHits ?? []) as Array<{
+              name: string;
+              snippet: string;
+              world_id: string | null;
+            }>)
+              .map((hit) => `### ${worldName(hit.world_id)} · ${hit.name}\n${hit.snippet}`)
               .join("\n\n");
+
+            if (!grantedDocs) {
+              const { data: titles } = await supabase
+                .from("portal_knowledge_items")
+                .select("name, world_id")
+                .in("id", grantedIds)
+                .limit(6);
+              grantedDocs = (titles ?? []).length
+                ? `Documentos autorizados sin coincidencia para esta consulta: ${(titles ?? [])
+                    .map((item) => `${worldName(item.world_id)} · ${item.name}`)
+                    .join("; ")}`
+                : "";
+            }
           }
         }
         knowledge = [identityContext, documents, grantedDocs].filter(Boolean).join("\n\n");
