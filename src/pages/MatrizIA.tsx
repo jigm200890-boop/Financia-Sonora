@@ -154,19 +154,30 @@ export default function MatrizIA() {
     });
   }
 
-  async function knowledgeContext() {
+  async function knowledgeContext(query: string) {
     if (contextWorld === "none") return "";
+
+    const { data: hits } = await supabase.rpc("portal_search_documents", {
+      p_query: query,
+      p_world_id: contextWorld,
+      p_limit: 4,
+      p_item_ids: null,
+    });
+    const fragments = ((hits ?? []) as Array<{ name: string; snippet: string }>)
+      .map((hit) => `### ${hit.name}\n${hit.snippet}`)
+      .join("\n\n");
+    if (fragments) return fragments;
+
     const { data } = await supabase
       .from("portal_knowledge_items")
       .select("name, content")
       .eq("world_id", contextWorld)
       .not("content", "is", null)
       .order("updated_at", { ascending: false })
-      .limit(4);
+      .limit(2);
     return (data ?? [])
-      .map((item) => `### ${item.name}\n${item.content ?? ""}`)
-      .join("\n\n")
-      .slice(0, 6000);
+      .map((item) => `### ${item.name}\n${(item.content ?? "").slice(0, 700)}`)
+      .join("\n\n");
   }
 
   async function ensureConversation(firstMessage: string) {
@@ -205,7 +216,7 @@ export default function MatrizIA() {
       content,
     }).catch(() => toast.error("No se pudo guardar tu mensaje en el historial."));
 
-    const knowledge = await knowledgeContext();
+    const knowledge = await knowledgeContext(content);
     const targets = [...activeAgents];
     setPending(Object.fromEntries(targets.map((agent) => [agent.id, true])));
     setErrors({});

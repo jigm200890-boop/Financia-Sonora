@@ -1,0 +1,4 @@
+delete from public.portal_document_grants where subject_id in ('8574dfbb-edfb-4d34-ad55-ea6a41732c99','823fa532-8152-4756-934d-e236fa9b31c1');
+delete from public.portal_document_grants where revoked_at is not null;
+delete from public.portal_profiles where id in ('5507933d-102d-45c4-a639-e3a2f0cf7710','8574dfbb-edfb-4d34-ad55-ea6a41732c99');
+delete from auth.users where id in ('5507933d-102d-45c4-a639-e3a2f0cf7710','8574dfbb-edfb-4d34-ad55-ea6a41732c99');

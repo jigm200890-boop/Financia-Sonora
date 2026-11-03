@@ -1,0 +1,70 @@
+-- Etapa 1: búsqueda y recuperación documental (vector mantenido por trigger)
+alter table public.portal_knowledge_items add column if not exists search_vector tsvector;
+
+create or replace function public.portal_update_search_vector()
+returns trigger language plpgsql as $$
+begin
+  new.search_vector :=
+    setweight(to_tsvector('spanish', coalesce(new.name, '')), 'A') ||
+    setweight(to_tsvector('spanish', coalesce(new.content, '')), 'B') ||
+    setweight(to_tsvector('spanish', coalesce(array_to_string(new.tags, ' '), '')), 'B');
+  return new;
+end;
+$$;
+
+create trigger portal_items_search
+  before insert or update on public.portal_knowledge_items
+  for each row execute function public.portal_update_search_vector();
+
+create index if not exists portal_items_search_idx
+  on public.portal_knowledge_items using gin (search_vector);
+
+create or replace function public.portal_search_documents(
+  p_query text,
+  p_world_id uuid default null,
+  p_limit integer default 8,
+  p_item_ids uuid[] default null
+)
+returns table (
+  id uuid,
+  name text,
+  world_id uuid,
+  folder_id uuid,
+  kind text,
+  snippet text,
+  rank real,
+  updated_at timestamptz,
+  access_mode text
+)
+language sql
+stable
+as $$
+  select
+    i.id,
+    i.name,
+    i.world_id,
+    i.folder_id,
+    i.kind,
+    ts_headline(
+      'spanish',
+      coalesce(nullif(i.content, ''), i.name),
+      websearch_to_tsquery('spanish', coalesce(p_query, '')),
+      'StartSel=«, StopSel=», MaxFragments=2, MinWords=8, MaxWords=24'
+    ) as snippet,
+    ts_rank(i.search_vector, websearch_to_tsquery('spanish', coalesce(p_query, ''))) as rank,
+    i.updated_at,
+    i.access_mode
+  from public.portal_knowledge_items i
+  where (p_world_id is null or i.world_id = p_world_id)
+    and (p_item_ids is null or i.id = any(p_item_ids))
+    and i.search_vector @@ websearch_to_tsquery('spanish', coalesce(p_query, ''))
+  order by rank desc, i.updated_at desc
+  limit greatest(1, least(coalesce(p_limit, 8), 20));
+$$;
+
+-- Relleno único del índice para los documentos existentes, sin tocar name/content ni updated_at
+set session_replication_role = replica;
+update public.portal_knowledge_items
+set search_vector = search_vector
+where search_vector is null;
+set session_replication_role = origin;

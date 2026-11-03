@@ -3880,6 +3880,7 @@ export type Database = {
           kind: string
           mime_type: string | null
           name: string
+          search_vector: unknown | null
           size_bytes: number | null
           storage_path: string | null
           tags: string[]
@@ -3896,6 +3897,7 @@ export type Database = {
           kind?: string
           mime_type?: string | null
           name: string
+          search_vector?: unknown | null
           size_bytes?: number | null
           storage_path?: string | null
           tags?: string[]
@@ -3912,6 +3914,7 @@ export type Database = {
           kind?: string
           mime_type?: string | null
           name?: string
+          search_vector?: unknown | null
           size_bytes?: number | null
           storage_path?: string | null
           tags?: string[]
@@ -4228,6 +4231,25 @@ export type Database = {
       portal_is_admin: {
         Args: Record<PropertyKey, never>
         Returns: boolean
+      }
+      portal_search_documents: {
+        Args: {
+          p_item_ids?: string[]
+          p_limit?: number
+          p_query: string
+          p_world_id?: string
+        }
+        Returns: {
+          access_mode: string
+          folder_id: string
+          id: string
+          kind: string
+          name: string
+          rank: number
+          snippet: string
+          updated_at: string
+          world_id: string
+        }[]
       }
       portal_world_visible: {
         Args: { p_world_id: string }

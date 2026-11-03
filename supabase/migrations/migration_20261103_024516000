@@ -1,0 +1,8 @@
+set session_replication_role = replica;
+update public.portal_knowledge_items
+set search_vector =
+  setweight(to_tsvector('spanish', coalesce(name, '')), 'A') ||
+  setweight(to_tsvector('spanish', coalesce(content, '')), 'B') ||
+  setweight(to_tsvector('spanish', coalesce(array_to_string(tags, ' '), '')), 'B')
+where search_vector is null;
+set session_replication_role = origin;

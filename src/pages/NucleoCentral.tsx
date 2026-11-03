@@ -345,16 +345,28 @@ export default function NucleoCentral() {
 
       let knowledge = identityContext;
       if (coreWorld) {
-        const { data } = await supabase
-          .from("portal_knowledge_items")
-          .select("name, content")
-          .eq("world_id", coreWorld.id)
-          .not("content", "is", null)
-          .order("updated_at", { ascending: false })
-          .limit(4);
-        const documents = (data ?? [])
-          .map((item) => `### ${item.name}\n${item.content ?? ""}`)
+        const { data: hits } = await supabase.rpc("portal_search_documents", {
+          p_query: content,
+          p_world_id: coreWorld.id,
+          p_limit: 4,
+          p_item_ids: null,
+        });
+        let documents = ((hits ?? []) as Array<{ name: string; snippet: string }>)
+          .map((hit) => `### ${hit.name}\n${hit.snippet}`)
           .join("\n\n");
+
+        if (!documents) {
+          const { data: recent } = await supabase
+            .from("portal_knowledge_items")
+            .select("name, content")
+            .eq("world_id", coreWorld.id)
+            .not("content", "is", null)
+            .order("updated_at", { ascending: false })
+            .limit(2);
+          documents = (recent ?? [])
+            .map((item) => `### ${item.name}\n${(item.content ?? "").slice(0, 700)}`)
+            .join("\n\n");
+        }
         let grantedDocs = "";
         if (atlas) {
           const { data: granted } = await supabase

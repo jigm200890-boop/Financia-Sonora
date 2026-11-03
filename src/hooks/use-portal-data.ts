@@ -520,6 +520,46 @@ export async function insertMessage(input: {
   fail(error);
 }
 
+export type DocumentSearchHit = {
+  id: string;
+  name: string;
+  world_id: string | null;
+  folder_id: string | null;
+  kind: string;
+  snippet: string;
+  rank: number;
+  updated_at: string;
+  access_mode: string;
+};
+
+export function useDocumentSearch(
+  query: string,
+  worldId?: string | null,
+  itemIds?: string[] | null,
+) {
+  const term = query.trim();
+  return useQuery({
+    queryKey: [
+      ROOT,
+      "search",
+      term,
+      worldId ?? "all",
+      itemIds && itemIds.length > 0 ? itemIds.join(",") : "none",
+    ],
+    enabled: term.length >= 2,
+    queryFn: async (): Promise<DocumentSearchHit[]> => {
+      const { data, error } = await supabase.rpc("portal_search_documents", {
+        p_query: term,
+        p_world_id: worldId ?? null,
+        p_limit: 10,
+        p_item_ids: itemIds && itemIds.length > 0 ? itemIds : null,
+      });
+      if (error) throw new Error(error.message);
+      return (data ?? []) as DocumentSearchHit[];
+    },
+  });
+}
+
 /* ------------------------------------------------- adjuntos y permisos */
 
 export function useAttachments(conversationId?: string) {

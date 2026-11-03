@@ -24,6 +24,7 @@ import {
   Upload,
 } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/auth-context";
 import {
   getSignedUrl,
@@ -38,6 +39,7 @@ import {
   useRevokeGrant,
   useSetItemAccess,
   useWorldDocumentGrants,
+  useDocumentSearch,
   logDocumentEvent,
   useKnowledgeItems,
   useKnowledgeVersions,
@@ -94,6 +96,11 @@ export default function Conocimiento() {
   const { data: worlds } = useWorlds();
   const { data: worldGrantedIds } = useWorldDocumentGrants(
     selectedWorld === ALL ? undefined : selectedWorld,
+  );
+  const searchActive = search.trim().length >= 2;
+  const { data: searchHits, isFetching: searchingDocuments } = useDocumentSearch(
+    search,
+    selectedWorld === ALL ? null : selectedWorld,
   );
   const { data: folders, isLoading: foldersLoading } = useFolders();
   const { data: items, isLoading: itemsLoading } = useKnowledgeItems();
@@ -210,6 +217,18 @@ export default function Conocimiento() {
 
   function countFor(folderId: string) {
     return (items ?? []).filter((item) => item.folder_id === folderId).length;
+  }
+
+  async function openHit(hit: { id: string; world_id: string | null }) {
+    const { data } = await supabase
+      .from("portal_knowledge_items")
+      .select("*")
+      .eq("id", hit.id)
+      .maybeSingle();
+    if (data) {
+      setSelectedWorld(data.world_id ?? ALL);
+      void openDocument(data as KnowledgeItemRow);
+    }
   }
 
   function openNewDocument() {
@@ -559,7 +578,7 @@ export default function Conocimiento() {
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar"
+                  placeholder="Buscar en contenido"
                   className="h-9 w-full pl-8 sm:w-[200px]"
                 />
               </div>
@@ -586,7 +605,42 @@ export default function Conocimiento() {
             </div>
           </div>
 
-          {itemsLoading ? (
+          {searchActive ? (
+            <div className="space-y-2">
+              <p className="px-1 text-[11px] text-muted-foreground">
+                {searchingDocuments
+                  ? "Buscando en el contenido…"
+                  : `${(searchHits ?? []).length} coincidencias en contenido, títulos y etiquetas`}
+              </p>
+              {(searchHits ?? []).map((hit) => (
+                <button
+                  key={hit.id}
+                  onClick={() => void openHit(hit)}
+                  className="panel w-full p-3 text-left transition-colors hover:border-primary/40"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-sm font-medium text-foreground">{hit.name}</p>
+                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                      {formatDateTime(hit.updated_at)}
+                    </span>
+                  </div>
+                  <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-[11px] leading-relaxed text-muted-foreground">
+                    {hit.snippet}
+                  </p>
+                  <p className="mt-1.5 text-[10px] text-muted-foreground/80">
+                    {hit.world_id ? worldName(hit.world_id) : "Sin mundo"}
+                    {hit.access_mode === "restricted" ? " · restringido" : ""}
+                  </p>
+                </button>
+              ))}
+              {!searchingDocuments && (searchHits ?? []).length === 0 ? (
+                <div className="panel px-4 py-8 text-center text-xs text-muted-foreground">
+                  Sin coincidencias. Prueba con otra palabra o revisa que el documento esté en este
+                  mundo.
+                </div>
+              ) : null}
+            </div>
+          ) : itemsLoading ? (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {[0, 1, 2, 3].map((key) => (
                 <Skeleton key={key} className="h-[120px] rounded-lg" />
