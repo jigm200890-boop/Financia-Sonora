@@ -3613,6 +3613,39 @@ export type Database = {
         }
         Relationships: []
       }
+      portal_core_identity: {
+        Row: {
+          content: string | null
+          id: string
+          position: number
+          section: string
+          status: string
+          title: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          content?: string | null
+          id?: string
+          position?: number
+          section: string
+          status?: string
+          title: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          content?: string | null
+          id?: string
+          position?: number
+          section?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       portal_integrations: {
         Row: {
           created_at: string

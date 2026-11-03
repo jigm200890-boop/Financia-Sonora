@@ -8,6 +8,7 @@ import {
   Circle,
   ClipboardCopy,
   FileText,
+  Fingerprint,
   FolderOpen,
   HardDrive,
   Hexagon,
@@ -33,6 +34,7 @@ import {
   useAgents,
   useAgreements,
   useBackupSteps,
+  useCoreIdentity,
   useCoreConversation,
   useDeleteAgreement,
   useDeleteObjective,
@@ -40,6 +42,7 @@ import {
   useKnowledgeItems,
   useObjectives,
   useSaveAgreement,
+  useSaveCoreIdentity,
   useSaveDocument,
   useSaveObjective,
   useSaveTask,
@@ -72,6 +75,7 @@ import { modelLabel } from "@/lib/ai-models";
 import type {
   AgreementRow,
   BackupStepRow,
+  CoreIdentityRow,
   MessageRow,
   ObjectiveRow,
 } from "@/lib/portal-types";
@@ -79,6 +83,7 @@ import { cn } from "@/lib/utils";
 
 const TABS = [
   { id: "mesa", label: "Mesa de trabajo", icon: MessageSquare },
+  { id: "identidad", label: "Identidad", icon: Fingerprint },
   { id: "acuerdos", label: "Acuerdos", icon: ShieldCheck },
   { id: "objetivos", label: "Objetivos", icon: Target },
   { id: "documentos", label: "Documentos", icon: FolderOpen },
@@ -106,6 +111,9 @@ export default function NucleoCentral() {
   const { data: items } = useKnowledgeItems();
   const { data: integrations } = useIntegrations();
   const { data: backupSteps } = useBackupSteps();
+  const { data: identity } = useCoreIdentity();
+  const saveIdentity = useSaveCoreIdentity();
+  const [identitySection, setIdentitySection] = useState<CoreIdentityRow | null>(null);
   const setBackupStatus = useSetBackupStepStatus();
   const { data: coreConversation } = useCoreConversation();
   const saveDocument = useSaveDocument();
@@ -211,7 +219,12 @@ export default function NucleoCentral() {
     });
 
     try {
-      let knowledge = "";
+      const identityContext = (identity ?? [])
+        .filter((row) => row.status === "definido" && row.content)
+        .map((row) => `## ${row.title}\n${row.content}`)
+        .join("\n\n");
+
+      let knowledge = identityContext;
       if (coreWorld) {
         const { data } = await supabase
           .from("portal_knowledge_items")
@@ -220,10 +233,10 @@ export default function NucleoCentral() {
           .not("content", "is", null)
           .order("updated_at", { ascending: false })
           .limit(4);
-        knowledge = (data ?? [])
+        const documents = (data ?? [])
           .map((item) => `### ${item.name}\n${item.content ?? ""}`)
-          .join("\n\n")
-          .slice(0, 6000);
+          .join("\n\n");
+        knowledge = [identityContext, documents].filter(Boolean).join("\n\n");
       }
 
       const history = [...previous, userMessage].map((message) => ({
@@ -626,6 +639,13 @@ export default function NucleoCentral() {
         </div>
       ) : null}
 
+      {tab === "identidad" ? (
+        <IdentityPanel
+          rows={identity ?? []}
+          onEdit={(row) => setIdentitySection(row)}
+        />
+      ) : null}
+
       {tab === "acuerdos" ? (
         <section>
           <SectionTitle
@@ -976,6 +996,27 @@ export default function NucleoCentral() {
       ) : null}
 
       {tab === "limites" ? <LimitsPanel openTasks={openTasks.length} /> : null}
+
+      <IdentityDialog
+        row={identitySection}
+        onOpenChange={(open) => {
+          if (!open) setIdentitySection(null);
+        }}
+        onSave={(section, content) => {
+          void saveIdentity
+            .mutateAsync({ section, content })
+            .then(() => {
+              toast.success(
+                content.trim() ? "Sección guardada" : "Sección marcada como pendiente",
+              );
+              setIdentitySection(null);
+            })
+            .catch((caught: unknown) =>
+              toast.error(caught instanceof Error ? caught.message : "No se pudo guardar."),
+            );
+        }}
+        saving={saveIdentity.isPending}
+      />
 
       <Dialog open={importOpen} onOpenChange={setImportOpen}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
@@ -1413,6 +1454,147 @@ function AgreementDialog({
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function IdentityPanel({
+  rows,
+  onEdit,
+}: {
+  rows: CoreIdentityRow[];
+  onEdit: (row: CoreIdentityRow) => void;
+}) {
+  const defined = rows.filter((row) => row.status === "definido" && row.content).length;
+  const pct = rows.length > 0 ? Math.round((defined / rows.length) * 100) : 0;
+
+  return (
+    <section className="space-y-4">
+      <div className="panel p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-foreground">
+              Ficha de identidad y contexto operativo
+            </p>
+            <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
+              Contexto autorizado del Núcleo Central. Atlas lo recibe al iniciar cada conversación.
+              No incluye tu espacio privado de aspiraciones ni información de otros mundos.
+            </p>
+          </div>
+          <span className="rounded-full border border-border bg-muted/50 px-2 py-0.5 text-[10px] text-muted-foreground">
+            {defined} de {rows.length} definidos
+          </span>
+        </div>
+        <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
+          <div className="h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
+        </div>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Los campos vacíos quedan marcados como pendientes: no se rellenan con suposiciones.
+        </p>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {rows.map((row) => {
+          const isDefined = row.status === "definido" && !!row.content;
+          return (
+            <article key={row.id} className="panel flex h-full flex-col p-4">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="text-sm font-semibold text-foreground">{row.title}</h3>
+                <span
+                  className={cn(
+                    "shrink-0 rounded-full border px-2 py-0.5 text-[10px]",
+                    isDefined
+                      ? "border-success/40 bg-success/10 text-success"
+                      : "border-warning/40 bg-warning/10 text-warning",
+                  )}
+                >
+                  {isDefined ? "Definido" : "Pendiente"}
+                </span>
+              </div>
+              <p
+                className={cn(
+                  "mt-2 whitespace-pre-wrap text-[11px] leading-relaxed",
+                  isDefined ? "text-muted-foreground" : "text-muted-foreground/70 italic",
+                )}
+              >
+                {isDefined ? row.content : "Pendiente de definir. No se ha registrado información."}
+              </p>
+              <div className="mt-auto pt-3">
+                <Button size="xs" variant="outlineMuted" onClick={() => onEdit(row)}>
+                  <Pencil className="h-3.5 w-3.5" />
+                  {isDefined ? "Editar" : "Definir"}
+                </Button>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+
+      <div className="panel border-success/30 bg-success/5 p-4">
+        <p className="text-xs font-semibold text-foreground">Qué recibe Atlas y qué no</p>
+        <ul className="mt-2 space-y-1.5 text-[11px] leading-relaxed text-muted-foreground">
+          <li>· Recibe: las secciones definidas de esta ficha y los documentos del mundo Núcleo Central.</li>
+          <li>· No recibe: tu mundo privado “Historia y aspiraciones”, otros mundos, ni los acuerdos y objetivos.</li>
+          <li>· La ficha es editable solo por el administrador y se guarda en la base del portal.</li>
+        </ul>
+      </div>
+    </section>
+  );
+}
+
+function IdentityDialog({
+  row,
+  onOpenChange,
+  onSave,
+  saving,
+}: {
+  row: CoreIdentityRow | null;
+  onOpenChange: (open: boolean) => void;
+  onSave: (section: string, content: string) => void;
+  saving: boolean;
+}) {
+  const [value, setValue] = useState("");
+
+  useEffect(() => {
+    setValue(row?.content ?? "");
+  }, [row]);
+
+  return (
+    <Dialog open={!!row} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>{row?.title}</DialogTitle>
+          <DialogDescription>
+            Escribe solo información confirmada. Si dejas el campo vacío, la sección queda como
+            pendiente.
+          </DialogDescription>
+        </DialogHeader>
+        <Textarea
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          rows={8}
+          placeholder="Sin información confirmada todavía…"
+        />
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancelar
+          </Button>
+          <Button
+            variant="outlineMuted"
+            disabled={saving}
+            onClick={() => row && onSave(row.section, "")}
+          >
+            Dejar pendiente
+          </Button>
+          <Button
+            disabled={saving}
+            onClick={() => row && onSave(row.section, value)}
+          >
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            Guardar
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

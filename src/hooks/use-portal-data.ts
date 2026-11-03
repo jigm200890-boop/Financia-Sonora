@@ -14,6 +14,7 @@ import {
   type ObjectiveRow,
   type AgreementRow,
   type BackupStepRow,
+  type CoreIdentityRow,
   type KnowledgeVersionRow,
   type ProfileRow,
   type Role,
@@ -41,6 +42,7 @@ export const qk = {
   objectives: [ROOT, "objectives"],
   agreements: [ROOT, "agreements"],
   backupSteps: [ROOT, "backup-steps"],
+  coreIdentity: [ROOT, "core-identity"],
   versions: (id: string) => [ROOT, "versions", id],
   messages: (id: string) => [ROOT, "messages", id],
 };
@@ -488,6 +490,42 @@ export async function insertMessage(input: {
 }
 
 /* -------------------------------------------------- núcleo central */
+
+export function useCoreIdentity() {
+  return useQuery({
+    queryKey: qk.coreIdentity,
+    queryFn: async (): Promise<CoreIdentityRow[]> => {
+      const { data, error } = await supabase
+        .from("portal_core_identity")
+        .select("*")
+        .order("position", { ascending: true });
+      fail(error);
+      return data ?? [];
+    },
+  });
+}
+
+export function useSaveCoreIdentity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { section: string; content: string }) => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const trimmed = input.content.trim();
+      const { error } = await supabase
+        .from("portal_core_identity")
+        .update({
+          content: trimmed || null,
+          status: trimmed ? "definido" : "pendiente",
+          updated_by: user?.id ?? null,
+        })
+        .eq("section", input.section);
+      fail(error);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.coreIdentity }),
+  });
+}
 
 export function useCoreConversation() {
   return useQuery({

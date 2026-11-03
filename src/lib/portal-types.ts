@@ -21,6 +21,7 @@ export type ObjectiveRow = Tables["portal_objectives"]["Row"];
 export type AgreementRow = Tables["portal_agreements"]["Row"];
 export type BackupStepRow = Tables["portal_backup_steps"]["Row"];
 export type KnowledgeVersionRow = Tables["portal_knowledge_versions"]["Row"];
+export type CoreIdentityRow = Tables["portal_core_identity"]["Row"];
 
 export type WorkflowStep = {
   title: string;
