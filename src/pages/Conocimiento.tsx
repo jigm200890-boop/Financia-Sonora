@@ -94,14 +94,6 @@ export default function Conocimiento() {
   const { canEdit } = useAuth();
   const [searchParams] = useSearchParams();
   const { data: worlds } = useWorlds();
-  const { data: worldGrantedIds } = useWorldDocumentGrants(
-    selectedWorld === ALL ? undefined : selectedWorld,
-  );
-  const searchActive = search.trim().length >= 2;
-  const { data: searchHits, isFetching: searchingDocuments } = useDocumentSearch(
-    search,
-    selectedWorld === ALL ? null : selectedWorld,
-  );
   const { data: folders, isLoading: foldersLoading } = useFolders();
   const { data: items, isLoading: itemsLoading } = useKnowledgeItems();
   const createFolder = useCreateFolder();
@@ -117,6 +109,16 @@ export default function Conocimiento() {
   );
   const [selectedFolder, setSelectedFolder] = useState<string>(ALL);
   const [search, setSearch] = useState("");
+
+  // Dependen de selectedWorld y search: se declaran después de ambos estados.
+  const { data: worldGrantedIds } = useWorldDocumentGrants(
+    selectedWorld === ALL ? undefined : selectedWorld,
+  );
+  const searchActive = search.trim().length >= 2;
+  const { data: searchHits, isFetching: searchingDocuments } = useDocumentSearch(
+    search,
+    selectedWorld === ALL ? null : selectedWorld,
+  );
   const [view, setView] = useState<"grid" | "list">("grid");
   const [folderDialog, setFolderDialog] = useState(false);
   const [folderName, setFolderName] = useState("");
