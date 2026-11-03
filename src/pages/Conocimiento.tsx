@@ -19,6 +19,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Share2,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -28,8 +29,16 @@ import {
   getSignedUrl,
   useCreateFolder,
   useDeleteFolder,
+  useAgents,
   useDeleteItem,
+  useDocumentEvents,
+  useDocumentGrants,
   useFolders,
+  useGrantDocument,
+  useRevokeGrant,
+  useSetItemAccess,
+  useWorldDocumentGrants,
+  logDocumentEvent,
   useKnowledgeItems,
   useKnowledgeVersions,
   useRenameFolder,
@@ -83,6 +92,9 @@ export default function Conocimiento() {
   const { canEdit } = useAuth();
   const [searchParams] = useSearchParams();
   const { data: worlds } = useWorlds();
+  const { data: worldGrantedIds } = useWorldDocumentGrants(
+    selectedWorld === ALL ? undefined : selectedWorld,
+  );
   const { data: folders, isLoading: foldersLoading } = useFolders();
   const { data: items, isLoading: itemsLoading } = useKnowledgeItems();
   const createFolder = useCreateFolder();
@@ -109,6 +121,30 @@ export default function Conocimiento() {
   const [preview, setPreview] = useState<KnowledgeItemRow | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [historyItem, setHistoryItem] = useState<KnowledgeItemRow | null>(null);
+  const [permissionsItem, setPermissionsItem] = useState<KnowledgeItemRow | null>(null);
+  const [accessMode, setAccessMode] = useState<"world" | "restricted">("world");
+  const [grantType, setGrantType] = useState<"agent" | "world">("agent");
+  const [grantTarget, setGrantTarget] = useState<string>("");
+  const { data: grantAgents } = useAgents();
+  const { data: grants } = useDocumentGrants(permissionsItem?.id);
+  const { data: events } = useDocumentEvents(permissionsItem?.id);
+  const grantDocument = useGrantDocument();
+  const revokeGrant = useRevokeGrant();
+  const setItemAccess = useSetItemAccess();
+
+  useEffect(() => {
+    if (permissionsItem) setAccessMode(permissionsItem.access_mode as "world" | "restricted");
+  }, [permissionsItem]);
+
+  function subjectLabel(type: string, id: string) {
+    if (type === "agent") {
+      return (grantAgents ?? []).find((agent) => agent.id === id)?.name ?? "Agente";
+    }
+    if (type === "world") {
+      return (worlds ?? []).find((world) => world.id === id)?.name ?? "Proyecto";
+    }
+    return "Usuario";
+  }
   const { data: versions } = useKnowledgeVersions(historyItem?.id);
   const restoreVersion = useRestoreVersion();
 
@@ -149,7 +185,11 @@ export default function Conocimiento() {
   const visibleItems = useMemo(() => {
     const term = search.trim().toLowerCase();
     return (items ?? []).filter((item) => {
-      const inWorld = selectedWorld === ALL ? true : item.world_id === selectedWorld;
+      const inWorld =
+        selectedWorld === ALL
+          ? true
+          : item.world_id === selectedWorld ||
+            (selectedFolder === ALL && (worldGrantedIds ?? []).includes(item.id));
       const inFolder =
         selectedFolder === ALL
           ? true
@@ -163,7 +203,7 @@ export default function Conocimiento() {
         item.tags.some((tag) => tag.toLowerCase().includes(term));
       return inWorld && inFolder && matchesTerm;
     });
-  }, [items, search, selectedFolder, selectedWorld]);
+  }, [items, search, selectedFolder, selectedWorld, worldGrantedIds]);
 
   const worldName = (id: string | null) =>
     (worlds ?? []).find((world) => world.id === id)?.name ?? "Sin mundo";
@@ -193,6 +233,7 @@ export default function Conocimiento() {
   }
 
   async function openPreview(item: KnowledgeItemRow) {
+    void logDocumentEvent({ itemId: item.id, action: "view", detail: item.name });
     setPreview(item);
     setPreviewUrl(null);
     if (item.kind === "file" && item.storage_path) {
@@ -622,6 +663,9 @@ export default function Conocimiento() {
                         {selectedWorld === ALL && item.world_id
                           ? ` · ${worldName(item.world_id)}`
                           : ""}
+                        {selectedWorld !== ALL && item.world_id !== selectedWorld
+                          ? " · compartido"
+                          : ""}
                       </span>
                       {view === "grid" && item.content ? (
                         <span className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground/80">
@@ -662,6 +706,10 @@ export default function Conocimiento() {
                               Historial
                             </DropdownMenuItem>
                           ) : null}
+                          <DropdownMenuItem onClick={() => setPermissionsItem(item)}>
+                            <Share2 className="mr-2 h-3.5 w-3.5" />
+                            Permisos y bitácora
+                          </DropdownMenuItem>
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive"
                             onClick={() => {
@@ -780,6 +828,195 @@ export default function Conocimiento() {
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={!!permissionsItem}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPermissionsItem(null);
+            setGrantTarget("");
+          }
+        }}
+      >
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="truncate">Permisos y bitácora</DialogTitle>
+            <DialogDescription className="truncate">{permissionsItem?.name}</DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="rounded-md border border-border/70 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-medium text-foreground">Acceso al documento</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {accessMode === "world"
+                      ? "Visible para quien tenga acceso al mundo."
+                      : "Solo el administrador y quienes reciban autorización."}
+                  </p>
+                </div>
+                <div className="flex gap-1">
+                  <Button
+                    size="xs"
+                    variant={accessMode === "world" ? "default" : "outlineMuted"}
+                    onClick={() => {
+                      if (!permissionsItem) return;
+                      setAccessMode("world");
+                      void setItemAccess.mutateAsync({
+                        itemId: permissionsItem.id,
+                        mode: "world",
+                      });
+                    }}
+                  >
+                    Todo el mundo
+                  </Button>
+                  <Button
+                    size="xs"
+                    variant={accessMode === "restricted" ? "default" : "outlineMuted"}
+                    onClick={() => {
+                      if (!permissionsItem) return;
+                      setAccessMode("restricted");
+                      void setItemAccess.mutateAsync({
+                        itemId: permissionsItem.id,
+                        mode: "restricted",
+                      });
+                    }}
+                  >
+                    Restringido
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-md border border-border/70 p-3">
+              <p className="text-xs font-medium text-foreground">Autorizaciones activas</p>
+              <div className="mt-2 space-y-1.5">
+                {(grants ?? []).map((grant) => (
+                  <div
+                    key={grant.id}
+                    className="flex items-center justify-between gap-2 rounded border border-border/60 px-2 py-1.5"
+                  >
+                    <span className="min-w-0 truncate text-[11px] text-muted-foreground">
+                      <span className="mr-1 rounded bg-muted px-1 py-0.5 text-[9px] uppercase text-muted-foreground">
+                        {grant.subject_type === "agent"
+                          ? "Agente"
+                          : grant.subject_type === "world"
+                            ? "Proyecto"
+                            : "Usuario"}
+                      </span>
+                      {subjectLabel(grant.subject_type, grant.subject_id)}
+                    </span>
+                    <Button
+                      size="xs"
+                      variant="ghost"
+                      className="text-muted-foreground hover:text-destructive"
+                      disabled={revokeGrant.isPending}
+                      onClick={() => {
+                        if (!permissionsItem) return;
+                        void revokeGrant.mutateAsync({
+                          grantId: grant.id,
+                          itemId: permissionsItem.id,
+                          label: subjectLabel(grant.subject_type, grant.subject_id),
+                        });
+                      }}
+                    >
+                      Revocar
+                    </Button>
+                  </div>
+                ))}
+                {(grants ?? []).length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">
+                    Sin autorizaciones. Nadie más tiene acceso explícito.
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="mt-3 flex flex-col gap-1.5 sm:flex-row">
+                <Select
+                  value={grantType}
+                  onValueChange={(value) => {
+                    setGrantType(value as "agent" | "world");
+                    setGrantTarget("");
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-full text-[11px] sm:w-[120px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="agent">Agente</SelectItem>
+                    <SelectItem value="world">Proyecto</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={grantTarget} onValueChange={setGrantTarget}>
+                  <SelectTrigger className="h-8 flex-1 text-[11px]">
+                    <SelectValue placeholder="Elegir destino" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {grantType === "agent"
+                      ? (grantAgents ?? []).map((agent) => (
+                          <SelectItem key={agent.id} value={agent.id}>
+                            {agent.name}
+                          </SelectItem>
+                        ))
+                      : (worlds ?? []).map((world) => (
+                          <SelectItem key={world.id} value={world.id}>
+                            {world.name}
+                          </SelectItem>
+                        ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  size="sm"
+                  disabled={!grantTarget || grantDocument.isPending || !permissionsItem}
+                  onClick={() => {
+                    if (!permissionsItem || !grantTarget) return;
+                    void grantDocument
+                      .mutateAsync({
+                        itemId: permissionsItem.id,
+                        subjectType: grantType,
+                        subjectId: grantTarget,
+                        label: subjectLabel(grantType, grantTarget),
+                      })
+                      .then(() => {
+                        toast.success("Autorización registrada");
+                        setGrantTarget("");
+                      })
+                      .catch((caught: unknown) =>
+                        toast.error(
+                          caught instanceof Error ? caught.message : "No se pudo autorizar.",
+                        ),
+                      );
+                  }}
+                >
+                  Autorizar
+                </Button>
+              </div>
+            </div>
+
+            <div className="rounded-md border border-border/70 p-3">
+              <p className="text-xs font-medium text-foreground">Bitácora</p>
+              <div className="mt-2 max-h-48 space-y-1 overflow-y-auto scrollbar-thin">
+                {(events ?? []).map((event) => (
+                  <div key={event.id} className="flex items-start justify-between gap-2">
+                    <p className="min-w-0 truncate text-[11px] text-muted-foreground">
+                      <span className="mr-1 rounded bg-muted px-1 py-0.5 text-[9px] uppercase">
+                        {event.action}
+                      </span>
+                      {event.detail ?? ""}
+                    </p>
+                    <span className="shrink-0 text-[10px] text-muted-foreground/70">
+                      {formatDateTime(event.created_at)}
+                    </span>
+                  </div>
+                ))}
+                {(events ?? []).length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">Sin movimientos registrados.</p>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!historyItem} onOpenChange={(open) => !open && setHistoryItem(null)}>
         <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
@@ -854,7 +1091,19 @@ export default function Conocimiento() {
             <div className="space-y-3">
               {previewUrl ? (
                 <Button asChild variant="success" size="sm">
-                  <a href={previewUrl} target="_blank" rel="noopener noreferrer">
+                  <a
+                    href={previewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() =>
+                      preview &&
+                      void logDocumentEvent({
+                        itemId: preview.id,
+                        action: "download",
+                        detail: preview.name,
+                      })
+                    }
+                  >
                     <Download className="h-4 w-4" />
                     Abrir archivo
                   </a>

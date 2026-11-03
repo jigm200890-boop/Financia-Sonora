@@ -1,0 +1,2 @@
+delete from public.portal_profiles where id in ('823fa532-8152-4756-934d-e236fa9b31c1','8de54148-c6ac-4495-a5cb-8f98c3130b98');
+delete from auth.users where id in ('823fa532-8152-4756-934d-e236fa9b31c1','8de54148-c6ac-4495-a5cb-8f98c3130b98');

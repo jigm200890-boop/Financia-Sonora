@@ -17,6 +17,7 @@ import {
   Loader2,
   Lock,
   MessageSquare,
+  Paperclip,
   Pencil,
   Plus,
   Send,
@@ -25,6 +26,7 @@ import {
   Trash2,
   TriangleAlert,
   Upload,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,6 +35,7 @@ import {
   insertMessage,
   useAgents,
   useAgreements,
+  useAttachments,
   useBackupSteps,
   useCoreIdentity,
   useCoreConversation,
@@ -70,10 +73,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { formatDate, formatDateTime } from "@/lib/portal-ui";
+import { formatBytes, formatDate, formatDateTime } from "@/lib/portal-ui";
 import { modelLabel } from "@/lib/ai-models";
+import { KNOWLEDGE_BUCKET } from "@/lib/portal-types";
 import type {
   AgreementRow,
+  AttachmentRow,
   BackupStepRow,
   CoreIdentityRow,
   MessageRow,
@@ -116,6 +121,7 @@ export default function NucleoCentral() {
   const [identitySection, setIdentitySection] = useState<CoreIdentityRow | null>(null);
   const setBackupStatus = useSetBackupStepStatus();
   const { data: coreConversation } = useCoreConversation();
+  const { data: attachmentRows } = useAttachments(coreConversation?.id);
   const saveDocument = useSaveDocument();
   const saveTask = useSaveTask();
 
@@ -127,6 +133,9 @@ export default function NucleoCentral() {
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [attachments, setAttachments] = useState<AttachmentRow[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [objectiveDialog, setObjectiveDialog] = useState(false);
   const [editingObjective, setEditingObjective] = useState<ObjectiveRow | null>(null);
@@ -176,6 +185,10 @@ export default function NucleoCentral() {
   }, [coreConversation]);
 
   useEffect(() => {
+    setAttachments(attachmentRows ?? []);
+  }, [attachmentRows]);
+
+  useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length, sending]);
 
@@ -194,31 +207,137 @@ export default function NucleoCentral() {
     );
   }
 
+  async function processAttachment(
+    file: File,
+    conversationId: string,
+    messageId: string,
+  ): Promise<string> {
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error(`${file.name} supera los 20 MB permitidos.`);
+      return "";
+    }
+    const extension = file.name.split(".").pop()?.toLowerCase() ?? "bin";
+    const path = `attachments/${conversationId}/${messageId}/${crypto.randomUUID()}.${extension}`;
+
+    const upload = await supabase.storage
+      .from(KNOWLEDGE_BUCKET)
+      .upload(path, file, {
+        contentType: file.type || "application/octet-stream",
+        upsert: false,
+      });
+    if (upload.error) {
+      toast.error(`${file.name}: ${upload.error.message}`);
+      return "";
+    }
+
+    const item = await supabase
+      .from("portal_knowledge_items")
+      .insert({
+        name: file.name,
+        folder_id: null,
+        world_id: coreWorld?.id ?? null,
+        kind: "file",
+        storage_path: path,
+        mime_type: file.type || null,
+        size_bytes: file.size,
+      })
+      .select("id")
+      .single();
+    if (item.error || !item.data) {
+      toast.error(`${file.name}: no se pudo registrar en la biblioteca.`);
+      return "";
+    }
+
+    let text = "";
+    let status: "listo" | "error" = "error";
+    let detail = "";
+
+    const signed = await supabase.storage.from(KNOWLEDGE_BUCKET).createSignedUrl(path, 900);
+    if (signed.data?.signedUrl) {
+      const extraction = await supabase.functions.invoke("extract-document", {
+        body: {
+          url: signed.data.signedUrl,
+          mimeType: file.type,
+          fileName: file.name,
+        },
+      });
+      const payload = extraction.data as { text?: string; error?: string; detail?: string };
+      if (!extraction.error && payload?.text) {
+        text = payload.text;
+        status = "listo";
+        detail = payload.detail ?? "";
+      } else {
+        detail = payload?.error ?? extraction.error?.message ?? "No se pudo leer el documento.";
+      }
+    } else {
+      detail = "No se pudo generar el enlace de lectura.";
+    }
+
+    const attachment = await supabase
+      .from("portal_attachments")
+      .insert({
+        item_id: item.data.id,
+        conversation_id: conversationId,
+        message_id: messageId,
+        file_name: file.name,
+        mime_type: file.type || null,
+        size_bytes: file.size,
+        storage_path: path,
+        extracted_text: text || null,
+        extraction_status: status,
+        extraction_detail: detail || null,
+      })
+      .select("*")
+      .single();
+
+    if (attachment.data) {
+      setAttachments((prev) => [...prev, attachment.data as AttachmentRow]);
+    }
+    if (status === "error") {
+      toast.warning(`${file.name}: ${detail}`);
+    }
+    return text;
+  }
+
   async function handleSend() {
     const content = input.trim();
-    if (!content || !coreConversation || !atlas) return;
+    if ((!content && pendingFiles.length === 0) || !coreConversation || !atlas) return;
+
+    const messageId = crypto.randomUUID();
+    const files = [...pendingFiles];
+    const previous = messages;
     const userMessage: MessageRow = {
-      id: crypto.randomUUID(),
+      id: messageId,
       conversation_id: coreConversation.id,
       agent_id: null,
       role: "user",
-      content,
+      content: content || "Documento adjunto",
       created_at: new Date().toISOString(),
     };
-    const previous = messages;
+
     setInput("");
+    setPendingFiles([]);
     setMessages([...previous, userMessage]);
     setError(null);
     setSending(true);
 
-    void insertMessage({
+    await insertMessage({
+      id: messageId,
       conversationId: coreConversation.id,
       agentId: null,
       role: "user",
-      content,
+      content: userMessage.content,
     });
 
     try {
+      let attachmentText = "";
+      for (const file of files) {
+        const extracted = await processAttachment(file, coreConversation.id, messageId);
+        if (extracted) {
+          attachmentText += `\n\n### ${file.name}\n${extracted}`;
+        }
+      }
+
       const identityContext = (identity ?? [])
         .filter((row) => row.status === "definido" && row.content)
         .map((row) => `## ${row.title}\n${row.content}`)
@@ -236,20 +355,46 @@ export default function NucleoCentral() {
         const documents = (data ?? [])
           .map((item) => `### ${item.name}\n${item.content ?? ""}`)
           .join("\n\n");
-        knowledge = [identityContext, documents].filter(Boolean).join("\n\n");
+        let grantedDocs = "";
+        if (atlas) {
+          const { data: granted } = await supabase
+            .from("portal_document_grants")
+            .select("item_id")
+            .eq("subject_type", "agent")
+            .eq("subject_id", atlas.id)
+            .is("revoked_at", null);
+          const grantedIds = (granted ?? []).map((row) => row.item_id);
+          if (grantedIds.length > 0) {
+            const { data: grantedItems } = await supabase
+              .from("portal_knowledge_items")
+              .select("name, content")
+              .in("id", grantedIds)
+              .not("content", "is", null)
+              .limit(5);
+            grantedDocs = (grantedItems ?? [])
+              .map((item) => `### ${item.name}\n${item.content ?? ""}`)
+              .join("\n\n");
+          }
+        }
+        knowledge = [identityContext, documents, grantedDocs].filter(Boolean).join("\n\n");
       }
 
-      const history = [...previous, userMessage].map((message) => ({
-        role: message.role,
-        content: message.content,
-      }));
+      const history = [
+        ...previous.map((message) => ({ role: message.role, content: message.content })),
+        {
+          role: "user" as const,
+          content: attachmentText
+            ? `${userMessage.content}\n\nDOCUMENTOS ADJUNTOS${attachmentText}`
+            : userMessage.content,
+        },
+      ];
 
       const { data, error: invokeError } = await supabase.functions.invoke("ai-matrix", {
         body: {
           model: atlas.model,
           agentName: "Atlas",
           responsibilities:
-            "Dirección estratégica del Núcleo Central. Decides con el usuario, ordenas prioridades, registras acuerdos y detectas bloqueos.",
+            "Dirección estratégica del Núcleo Central. Decides con el usuario, ordenas prioridades, registras acuerdos y detectas bloqueos. Si recibes documentos adjuntos, analízalos citando su nombre.",
           knowledge,
           messages: history,
         },
@@ -417,10 +562,29 @@ export default function NucleoCentral() {
 
               {messages.map((message) =>
                 message.role === "user" ? (
-                  <div key={message.id} className="flex justify-end">
+                  <div key={message.id} className="flex flex-col items-end gap-1.5">
                     <p className="max-w-[85%] rounded-lg rounded-br-sm bg-primary/15 px-3 py-2 text-[13px] leading-relaxed text-foreground">
                       {message.content}
                     </p>
+                    {attachments
+                      .filter((attachment) => attachment.message_id === message.id)
+                      .map((attachment) => (
+                        <span
+                          key={attachment.id}
+                          className="inline-flex max-w-[85%] items-center gap-2 rounded-md border border-border/70 bg-card/70 px-2 py-1 text-[10px] text-muted-foreground"
+                        >
+                          <FileText className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{attachment.file_name}</span>
+                          <span className="shrink-0">
+                            {formatBytes(attachment.size_bytes)}
+                          </span>
+                          {attachment.extraction_status === "listo" ? (
+                            <CheckCircle2 className="h-3 w-3 shrink-0 text-success" />
+                          ) : (
+                            <TriangleAlert className="h-3 w-3 shrink-0 text-warning" />
+                          )}
+                        </span>
+                      ))}
                   </div>
                 ) : (
                   <div key={message.id} className="group space-y-1.5">
@@ -514,7 +678,62 @@ export default function NucleoCentral() {
             </div>
 
             <div className="shrink-0 border-t border-border/60 p-3">
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.md"
+                className="hidden"
+                onChange={(event) => {
+                  const selected = Array.from(event.target.files ?? []);
+                  const accepted = selected.filter((file) => {
+                    if (file.size > 20 * 1024 * 1024) {
+                      toast.error(`${file.name} supera los 20 MB permitidos.`);
+                      return false;
+                    }
+                    return true;
+                  });
+                  setPendingFiles((prev) => [...prev, ...accepted]);
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+              />
+
+              {pendingFiles.length > 0 ? (
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {pendingFiles.map((file, index) => (
+                    <span
+                      key={`${file.name}-${index}`}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted/40 px-2 py-1 text-[10px] text-muted-foreground"
+                    >
+                      <FileText className="h-3 w-3" />
+                      <span className="max-w-[180px] truncate">{file.name}</span>
+                      <span>{formatBytes(file.size)}</span>
+                      <button
+                        onClick={() =>
+                          setPendingFiles((prev) => prev.filter((_, position) => position !== index))
+                        }
+                        className="text-muted-foreground hover:text-destructive"
+                        aria-label={`Quitar ${file.name}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+
               <div className="flex items-end gap-2">
+                <Button
+                  type="button"
+                  variant="outlineMuted"
+                  size="icon"
+                  className="h-[52px] w-11 shrink-0"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Adjuntar documento (PDF, Word, Excel, PowerPoint, TXT · máx. 20 MB)"
+                  aria-label="Adjuntar documento"
+                >
+                  <Paperclip className="h-4 w-4" />
+                </Button>
                 <Textarea
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
@@ -532,12 +751,21 @@ export default function NucleoCentral() {
                 <Button
                   className="h-[52px]"
                   onClick={() => void handleSend()}
-                  disabled={sending || !input.trim() || !atlas || !coreConversation}
+                  disabled={
+                    sending ||
+                    (!input.trim() && pendingFiles.length === 0) ||
+                    !atlas ||
+                    !coreConversation
+                  }
                 >
                   <Send className="h-4 w-4" />
                   Enviar
                 </Button>
               </div>
+              <p className="mt-2 text-[10px] text-muted-foreground">
+                Adjuntos: PDF, Word, Excel, PowerPoint o TXT · máx. 20 MB. El texto se extrae en el
+                servidor y se envía solo a Atlas.
+              </p>
               {!atlas || !coreConversation ? (
                 <p className="mt-2 text-[11px] text-destructive">
                   Falta el agente Atlas o la mesa privada. Recarga la página o crea la conversación.

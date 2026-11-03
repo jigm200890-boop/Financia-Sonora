@@ -1,0 +1,85 @@
+-- Adjuntos, permisos documentales y bitácora
+create table if not exists public.portal_attachments (
+  id uuid primary key default gen_random_uuid(),
+  item_id uuid not null references public.portal_knowledge_items(id) on delete cascade,
+  conversation_id uuid not null references public.portal_conversations(id) on delete cascade,
+  message_id uuid references public.portal_messages(id) on delete cascade,
+  file_name text not null,
+  mime_type text,
+  size_bytes bigint,
+  storage_path text not null,
+  extracted_text text,
+  extraction_status text not null default 'pendiente' check (extraction_status in ('pendiente','listo','error')),
+  extraction_detail text,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists portal_attachments_conversation_idx on public.portal_attachments(conversation_id);
+
+alter table public.portal_attachments enable row level security;
+create policy portal_attachments_admin_read on public.portal_attachments for select to authenticated
+  using (public.portal_is_admin());
+create policy portal_attachments_admin_insert on public.portal_attachments for insert to authenticated
+  with check (public.portal_is_admin());
+create policy portal_attachments_admin_update on public.portal_attachments for update to authenticated
+  using (public.portal_is_admin()) with check (public.portal_is_admin());
+
+create table if not exists public.portal_document_grants (
+  id uuid primary key default gen_random_uuid(),
+  item_id uuid not null references public.portal_knowledge_items(id) on delete cascade,
+  subject_type text not null check (subject_type in ('agent','world','user')),
+  subject_id uuid not null,
+  granted_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  revoked_at timestamptz,
+  revoked_by uuid references auth.users(id) on delete set null
+);
+
+create unique index if not exists portal_grants_active_unique
+  on public.portal_document_grants(item_id, subject_type, subject_id)
+  where revoked_at is null;
+
+alter table public.portal_document_grants enable row level security;
+create policy portal_grants_admin_read on public.portal_document_grants for select to authenticated
+  using (public.portal_is_admin());
+create policy portal_grants_admin_insert on public.portal_document_grants for insert to authenticated
+  with check (public.portal_is_admin());
+create policy portal_grants_admin_update on public.portal_document_grants for update to authenticated
+  using (public.portal_is_admin()) with check (public.portal_is_admin());
+
+create table if not exists public.portal_document_events (
+  id uuid primary key default gen_random_uuid(),
+  item_id uuid not null references public.portal_knowledge_items(id) on delete cascade,
+  actor_id uuid references auth.users(id) on delete set null,
+  action text not null check (action in ('upload','view','download','grant','revoke','update','restore')),
+  detail text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists portal_events_item_idx on public.portal_document_events(item_id);
+
+alter table public.portal_document_events enable row level security;
+create policy portal_events_admin_read on public.portal_document_events for select to authenticated
+  using (public.portal_is_admin());
+create policy portal_events_admin_insert on public.portal_document_events for insert to authenticated
+  with check (public.portal_is_admin());
+
+alter table public.portal_knowledge_items
+  add column if not exists access_mode text not null default 'world' check (access_mode in ('world','restricted'));
+
+alter policy portal_items_read on public.portal_knowledge_items
+  using (
+    (world_id is null or public.portal_world_visible(world_id))
+    and (
+      access_mode = 'world'
+      or public.portal_is_admin()
+      or exists (
+        select 1 from public.portal_document_grants g
+        where g.item_id = portal_knowledge_items.id
+          and g.subject_type = 'user'
+          and g.subject_id = auth.uid()
+          and g.revoked_at is null
+      )
+    )
+  );

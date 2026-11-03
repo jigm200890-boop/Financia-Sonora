@@ -1,0 +1,3 @@
+delete from public.portal_attachments where storage_path like 'qa/%' or file_name = 'prueba.pdf';
+delete from public.portal_document_grants where item_id = (select id from public.portal_knowledge_items where name = 'Memo maestro del ecosistema' limit 1);
+delete from public.portal_document_events where detail = 'Prueba de bitácora';

@@ -14,7 +14,10 @@ import {
   type ObjectiveRow,
   type AgreementRow,
   type BackupStepRow,
+  type AttachmentRow,
   type CoreIdentityRow,
+  type DocumentEventRow,
+  type DocumentGrantRow,
   type KnowledgeVersionRow,
   type ProfileRow,
   type Role,
@@ -43,6 +46,9 @@ export const qk = {
   agreements: [ROOT, "agreements"],
   backupSteps: [ROOT, "backup-steps"],
   coreIdentity: [ROOT, "core-identity"],
+  attachments: (id: string) => [ROOT, "attachments", id],
+  grants: (id: string) => [ROOT, "grants", id],
+  events: (id: string) => [ROOT, "events", id],
   versions: (id: string) => [ROOT, "versions", id],
   messages: (id: string) => [ROOT, "messages", id],
 };
@@ -338,17 +344,29 @@ export function useSaveDocument() {
           })
           .eq("id", input.id);
         fail(error);
+        void logDocumentEvent({
+          itemId: input.id,
+          action: "update",
+          detail: `Editado: ${input.name}`,
+        });
         return;
       }
-      const { error } = await supabase.from("portal_knowledge_items").insert({
-        name: input.name,
-        content: input.content,
-        folder_id: input.folderId,
-        world_id: input.worldId,
-        kind: "document",
-        tags: input.tags ?? [],
-      });
+      const { data, error } = await supabase
+        .from("portal_knowledge_items")
+        .insert({
+          name: input.name,
+          content: input.content,
+          folder_id: input.folderId,
+          world_id: input.worldId,
+          kind: "document",
+          tags: input.tags ?? [],
+        })
+        .select("id")
+        .single();
       fail(error);
+      if (data?.id) {
+        void logDocumentEvent({ itemId: data.id, action: "upload", detail: input.name });
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.items }),
   });
@@ -389,16 +407,27 @@ export function useUploadKnowledgeFile() {
         });
       fail(uploadError);
 
-      const { error } = await supabase.from("portal_knowledge_items").insert({
-        name: input.file.name,
-        folder_id: input.folderId,
-        world_id: input.worldId,
-        kind: "file",
-        storage_path: path,
-        mime_type: input.file.type || null,
-        size_bytes: input.file.size,
-      });
+      const { data, error } = await supabase
+        .from("portal_knowledge_items")
+        .insert({
+          name: input.file.name,
+          folder_id: input.folderId,
+          world_id: input.worldId,
+          kind: "file",
+          storage_path: path,
+          mime_type: input.file.type || null,
+          size_bytes: input.file.size,
+        })
+        .select("id")
+        .single();
       fail(error);
+      if (data?.id) {
+        void logDocumentEvent({
+          itemId: data.id,
+          action: "upload",
+          detail: input.file.name,
+        });
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.items }),
   });
@@ -475,18 +504,186 @@ export function useDeleteConversation() {
 }
 
 export async function insertMessage(input: {
+  id?: string;
   conversationId: string;
   agentId: string | null;
   role: "user" | "assistant";
   content: string;
 }) {
   const { error } = await supabase.from("portal_messages").insert({
+    ...(input.id ? { id: input.id } : {}),
     conversation_id: input.conversationId,
     agent_id: input.agentId,
     role: input.role,
     content: input.content,
   });
   fail(error);
+}
+
+/* ------------------------------------------------- adjuntos y permisos */
+
+export function useAttachments(conversationId?: string) {
+  return useQuery({
+    queryKey: qk.attachments(conversationId ?? "none"),
+    enabled: !!conversationId,
+    queryFn: async (): Promise<AttachmentRow[]> => {
+      const { data, error } = await supabase
+        .from("portal_attachments")
+        .select("*")
+        .eq("conversation_id", conversationId as string)
+        .order("created_at", { ascending: true });
+      fail(error);
+      return data ?? [];
+    },
+  });
+}
+
+export function useDocumentGrants(itemId?: string) {
+  return useQuery({
+    queryKey: qk.grants(itemId ?? "none"),
+    enabled: !!itemId,
+    queryFn: async (): Promise<DocumentGrantRow[]> => {
+      const { data, error } = await supabase
+        .from("portal_document_grants")
+        .select("*")
+        .eq("item_id", itemId as string)
+        .is("revoked_at", null)
+        .order("created_at", { ascending: false });
+      fail(error);
+      return data ?? [];
+    },
+  });
+}
+
+export function useDocumentEvents(itemId?: string) {
+  return useQuery({
+    queryKey: qk.events(itemId ?? "none"),
+    enabled: !!itemId,
+    queryFn: async (): Promise<DocumentEventRow[]> => {
+      const { data, error } = await supabase
+        .from("portal_document_events")
+        .select("*")
+        .eq("item_id", itemId as string)
+        .order("created_at", { ascending: false })
+        .limit(25);
+      fail(error);
+      return data ?? [];
+    },
+  });
+}
+
+export function useWorldDocumentGrants(worldId?: string) {
+  return useQuery({
+    queryKey: [ROOT, "world-grants", worldId ?? "none"],
+    enabled: !!worldId,
+    queryFn: async (): Promise<string[]> => {
+      const { data, error } = await supabase
+        .from("portal_document_grants")
+        .select("item_id")
+        .eq("subject_type", "world")
+        .eq("subject_id", worldId as string)
+        .is("revoked_at", null);
+      fail(error);
+      return (data ?? []).map((row) => row.item_id);
+    },
+  });
+}
+
+export function useGrantDocument() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      itemId: string;
+      subjectType: "agent" | "world" | "user";
+      subjectId: string;
+      label: string;
+    }) => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const { error } = await supabase.from("portal_document_grants").insert({
+        item_id: input.itemId,
+        subject_type: input.subjectType,
+        subject_id: input.subjectId,
+        granted_by: user?.id ?? null,
+      });
+      fail(error);
+      await supabase.from("portal_document_events").insert({
+        item_id: input.itemId,
+        actor_id: user?.id ?? null,
+        action: "grant",
+        detail: `Autorizado a ${input.label}`,
+      });
+    },
+    onSuccess: (_d, variables) => {
+      qc.invalidateQueries({ queryKey: qk.grants(variables.itemId) });
+      qc.invalidateQueries({ queryKey: qk.events(variables.itemId) });
+    },
+  });
+}
+
+export function useRevokeGrant() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      grantId: string;
+      itemId: string;
+      label: string;
+    }) => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from("portal_document_grants")
+        .update({ revoked_at: new Date().toISOString(), revoked_by: user?.id ?? null })
+        .eq("id", input.grantId);
+      fail(error);
+      await supabase.from("portal_document_events").insert({
+        item_id: input.itemId,
+        actor_id: user?.id ?? null,
+        action: "revoke",
+        detail: `Revocado a ${input.label}`,
+      });
+    },
+    onSuccess: (_d, variables) => {
+      qc.invalidateQueries({ queryKey: qk.grants(variables.itemId) });
+      qc.invalidateQueries({ queryKey: qk.events(variables.itemId) });
+    },
+  });
+}
+
+export function useSetItemAccess() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { itemId: string; mode: "world" | "restricted" }) => {
+      const { error } = await supabase
+        .from("portal_knowledge_items")
+        .update({ access_mode: input.mode })
+        .eq("id", input.itemId);
+      fail(error);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.items }),
+  });
+}
+
+export async function logDocumentEvent(input: {
+  itemId: string;
+  action: "upload" | "view" | "download" | "grant" | "revoke" | "update" | "restore";
+  detail?: string;
+}) {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    await supabase.from("portal_document_events").insert({
+      item_id: input.itemId,
+      actor_id: user?.id ?? null,
+      action: input.action,
+      detail: input.detail ?? null,
+    });
+  } catch {
+    // La bitácora no debe bloquear la acción principal.
+  }
 }
 
 /* -------------------------------------------------- núcleo central */
@@ -727,6 +924,11 @@ export function useRestoreVersion() {
         })
         .eq("id", version.item_id);
       fail(error);
+      void logDocumentEvent({
+        itemId: version.item_id,
+        action: "restore",
+        detail: `Restaurada versión: ${version.name}`,
+      });
     },
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: qk.items });

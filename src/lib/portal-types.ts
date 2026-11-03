@@ -22,6 +22,9 @@ export type AgreementRow = Tables["portal_agreements"]["Row"];
 export type BackupStepRow = Tables["portal_backup_steps"]["Row"];
 export type KnowledgeVersionRow = Tables["portal_knowledge_versions"]["Row"];
 export type CoreIdentityRow = Tables["portal_core_identity"]["Row"];
+export type AttachmentRow = Tables["portal_attachments"]["Row"];
+export type DocumentGrantRow = Tables["portal_document_grants"]["Row"];
+export type DocumentEventRow = Tables["portal_document_events"]["Row"];
 
 export type WorkflowStep = {
   title: string;

@@ -1,0 +1,2 @@
+create policy portal_grants_self_read on public.portal_document_grants for select to authenticated
+  using (subject_type = 'user' and subject_id = auth.uid());

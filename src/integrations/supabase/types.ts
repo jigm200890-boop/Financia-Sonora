@@ -3514,6 +3514,73 @@ export type Database = {
         }
         Relationships: []
       }
+      portal_attachments: {
+        Row: {
+          conversation_id: string
+          created_at: string
+          created_by: string | null
+          extracted_text: string | null
+          extraction_detail: string | null
+          extraction_status: string
+          file_name: string
+          id: string
+          item_id: string
+          message_id: string | null
+          mime_type: string | null
+          size_bytes: number | null
+          storage_path: string
+        }
+        Insert: {
+          conversation_id: string
+          created_at?: string
+          created_by?: string | null
+          extracted_text?: string | null
+          extraction_detail?: string | null
+          extraction_status?: string
+          file_name: string
+          id?: string
+          item_id: string
+          message_id?: string | null
+          mime_type?: string | null
+          size_bytes?: number | null
+          storage_path: string
+        }
+        Update: {
+          conversation_id?: string
+          created_at?: string
+          created_by?: string | null
+          extracted_text?: string | null
+          extraction_detail?: string | null
+          extraction_status?: string
+          file_name?: string
+          id?: string
+          item_id?: string
+          message_id?: string | null
+          mime_type?: string | null
+          size_bytes?: number | null
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_attachments_conversation_id_fkey"
+            columns: ["conversation_id"]
+            referencedRelation: "portal_conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portal_attachments_item_id_fkey"
+            columns: ["item_id"]
+            referencedRelation: "portal_knowledge_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portal_attachments_message_id_fkey"
+            columns: ["message_id"]
+            referencedRelation: "portal_messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       portal_backup_steps: {
         Row: {
           detail: string | null
@@ -3646,6 +3713,80 @@ export type Database = {
         }
         Relationships: []
       }
+      portal_document_events: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          detail: string | null
+          id: string
+          item_id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          detail?: string | null
+          id?: string
+          item_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          detail?: string | null
+          id?: string
+          item_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_document_events_item_id_fkey"
+            columns: ["item_id"]
+            referencedRelation: "portal_knowledge_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portal_document_grants: {
+        Row: {
+          created_at: string
+          granted_by: string | null
+          id: string
+          item_id: string
+          revoked_at: string | null
+          revoked_by: string | null
+          subject_id: string
+          subject_type: string
+        }
+        Insert: {
+          created_at?: string
+          granted_by?: string | null
+          id?: string
+          item_id: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          subject_id: string
+          subject_type: string
+        }
+        Update: {
+          created_at?: string
+          granted_by?: string | null
+          id?: string
+          item_id?: string
+          revoked_at?: string | null
+          revoked_by?: string | null
+          subject_id?: string
+          subject_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_document_grants_item_id_fkey"
+            columns: ["item_id"]
+            referencedRelation: "portal_knowledge_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       portal_integrations: {
         Row: {
           created_at: string
@@ -3730,6 +3871,7 @@ export type Database = {
       }
       portal_knowledge_items: {
         Row: {
+          access_mode: string
           content: string | null
           created_at: string
           created_by: string | null
@@ -3745,6 +3887,7 @@ export type Database = {
           world_id: string | null
         }
         Insert: {
+          access_mode?: string
           content?: string | null
           created_at?: string
           created_by?: string | null
@@ -3760,6 +3903,7 @@ export type Database = {
           world_id?: string | null
         }
         Update: {
+          access_mode?: string
           content?: string | null
           created_at?: string
           created_by?: string | null
