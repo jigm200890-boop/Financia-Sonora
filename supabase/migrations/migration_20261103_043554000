@@ -1,0 +1,24 @@
+-- Opción A: tres mundos de proyecto con familias estándar y ficha general en blanco
+insert into public.portal_worlds (name, kind, description, visibility, accent, sort_order) values
+('Santo Tomás', 'empresa', 'Conocimiento general, operación y decisiones de Santo Tomás.', 'shared', 'amber', 7),
+('Empresa de Mandaderos', 'empresa', 'Conocimiento general, operación y decisiones de la Empresa de Mandaderos.', 'shared', 'sky', 8),
+('FSonoraInmuebles', 'empresa', 'Conocimiento general, operación y decisiones de FSonoraInmuebles.', 'shared', 'emerald', 9);
+
+insert into public.portal_knowledge_folders (name, parent_id, world_id)
+select family.name, null, w.id
+from (values ('Identidad'), ('Operación'), ('Comercial'), ('Finanzas'), ('Cumplimiento'), ('Tecnología'), ('Personas')) as family(name)
+cross join public.portal_worlds w
+where w.name in ('Santo Tomás', 'Empresa de Mandaderos', 'FSonoraInmuebles');
+
+insert into public.portal_knowledge_items (folder_id, world_id, name, kind, content, tags)
+select
+  f.id,
+  w.id,
+  'Ficha general — ' || w.name,
+  'document',
+  '# Ficha general — ' || w.name || E'\n\nEstado: pendiente de definir. Esta ficha es una plantilla; no contiene información confirmada.\n\n## 1. Qué es\nPendiente.\n\n## 2. Quién responde\nPendiente.\n\n## 3. Qué ofrece\nPendiente.\n\n## 4. Clientes y mercado\nPendiente.\n\n## 5. Procesos clave\nPendiente.\n\n## 6. Sistemas y cuentas\nPendiente.\n\n## 7. Riesgos y pendientes\nPendiente.\n\n## 8. Fuentes\nPendiente.\n',
+  array['ficha general', 'plantilla']
+from public.portal_worlds w
+join public.portal_knowledge_folders f
+  on f.world_id = w.id and f.name = 'Identidad'
+where w.name in ('Santo Tomás', 'Empresa de Mandaderos', 'FSonoraInmuebles');
