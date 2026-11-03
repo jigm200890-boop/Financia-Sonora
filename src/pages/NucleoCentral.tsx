@@ -398,7 +398,7 @@ export default function NucleoCentral() {
               p_limit: 4,
               p_item_ids: grantedIds,
             });
-            grantedDocs = ((grantedHits ?? []) as Array<{
+            const matched = ((grantedHits ?? []) as Array<{
               name: string;
               snippet: string;
               world_id: string | null;
@@ -406,16 +406,28 @@ export default function NucleoCentral() {
               .map((hit) => `### ${worldName(hit.world_id)} · ${hit.name}\n${hit.snippet}`)
               .join("\n\n");
 
-            if (!grantedDocs) {
-              const { data: titles } = await supabase
+            if (matched) {
+              grantedDocs = `DOCUMENTOS AUTORIZADOS PARA ATLAS\n${matched}`;
+            } else {
+              // Sin coincidencias: se envía el inicio real del documento autorizado,
+              // nunca el de un documento que no esté autorizado.
+              const { data: docs } = await supabase
                 .from("portal_knowledge_items")
-                .select("name, world_id")
+                .select("name, world_id, content")
                 .in("id", grantedIds)
-                .limit(6);
-              grantedDocs = (titles ?? []).length
-                ? `Documentos autorizados sin coincidencia para esta consulta: ${(titles ?? [])
-                    .map((item) => `${worldName(item.world_id)} · ${item.name}`)
-                    .join("; ")}`
+                .limit(4);
+
+              const initial = (docs ?? [])
+                .map((item) => {
+                  const body = (item.content ?? "").trim();
+                  return body
+                    ? `### ${worldName(item.world_id)} · ${item.name}\n(fragmento inicial)\n${body.slice(0, 700)}`
+                    : `### ${worldName(item.world_id)} · ${item.name}\n(documento sin texto extraído)`;
+                })
+                .join("\n\n");
+
+              grantedDocs = initial
+                ? `DOCUMENTOS AUTORIZADOS PARA ATLAS (sin coincidencia léxica; fragmento inicial)\n${initial}`
                 : "";
             }
           }
