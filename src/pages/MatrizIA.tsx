@@ -49,6 +49,20 @@ import { cn } from "@/lib/utils";
 type PendingMap = Record<string, boolean>;
 type ErrorMap = Record<string, string | null>;
 
+const MATRIX_SELECTION_KEY = "portal-matrix-enabled-agents";
+
+function readSelection(): string[] | null {
+  try {
+    const raw = window.localStorage.getItem(MATRIX_SELECTION_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return parsed.filter((value): value is string => typeof value === "string");
+  } catch {
+    return null;
+  }
+}
+
 const SUGGESTIONS = [
   "Resume en qué estado está el ecosistema y qué falta por confirmar.",
   "Propón el orden de trabajo para la próxima semana.",
@@ -70,18 +84,37 @@ export default function MatrizIA() {
   const [input, setInput] = useState("");
   const [pending, setPending] = useState<PendingMap>({});
   const [errors, setErrors] = useState<ErrorMap>({});
-  const [disabledAgents, setDisabledAgents] = useState<string[]>([]);
+  const [enabledIds, setEnabledIds] = useState<string[] | null>(readSelection);
   const [savingMessage, setSavingMessage] = useState<MessageRow | null>(null);
   const [noteName, setNoteName] = useState("");
   const [noteWorld, setNoteWorld] = useState<string>("none");
   const [contextWorld, setContextWorld] = useState<string>("none");
 
+  const atlasAgent = useMemo(
+    () => (agents ?? []).find((agent) => agent.name === "Atlas") ?? null,
+    [agents],
+  );
+
+  useEffect(() => {
+    if (enabledIds !== null || !agents) return;
+    const fallback = atlasAgent?.id ?? agents.find((agent) => agent.status === "active")?.id;
+    setEnabledIds(fallback ? [fallback] : []);
+  }, [agents, atlasAgent, enabledIds]);
+
+  useEffect(() => {
+    if (enabledIds) {
+      window.localStorage.setItem(MATRIX_SELECTION_KEY, JSON.stringify(enabledIds));
+    }
+  }, [enabledIds]);
+
   const activeAgents = useMemo(
     () =>
       (agents ?? []).filter(
-        (agent) => agent.status === "active" && !disabledAgents.includes(agent.id),
+        (agent) =>
+          agent.status === "active" &&
+          (agent.id === atlasAgent?.id || (enabledIds ?? []).includes(agent.id)),
       ),
-    [agents, disabledAgents],
+    [agents, enabledIds, atlasAgent],
   );
 
   useEffect(() => {
@@ -111,9 +144,14 @@ export default function MatrizIA() {
   }, [conversationId]);
 
   function toggleAgent(id: string) {
-    setDisabledAgents((prev) =>
-      prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id],
-    );
+    if (id === atlasAgent?.id) {
+      toast.info("Atlas es el motor de dirección y permanece activo.");
+      return;
+    }
+    setEnabledIds((prev) => {
+      const base = prev ?? [];
+      return base.includes(id) ? base.filter((value) => value !== id) : [...base, id];
+    });
   }
 
   async function knowledgeContext() {
@@ -336,7 +374,8 @@ export default function MatrizIA() {
           Agentes activos
         </span>
         {(agents ?? []).map((agent) => {
-          const enabled = !disabledAgents.includes(agent.id);
+          const pinned = agent.id === atlasAgent?.id;
+          const enabled = pinned || (enabledIds ?? []).includes(agent.id);
           return (
             <button
               key={agent.id}
@@ -350,6 +389,7 @@ export default function MatrizIA() {
             >
               {enabled ? <Check className="h-3 w-3" /> : null}
               {agent.name}
+              {pinned ? <span className="text-[9px] opacity-70">fijo</span> : null}
             </button>
           );
         })}

@@ -71,8 +71,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       applySession(nextSession);
     });
 
+    // A session delivered in the URL hash (OAuth or link handoff) arrives
+    // after the first getSession() call. Wait for it instead of bouncing to
+    // the login screen before it is processed.
+    const hashHasSession =
+      typeof window !== "undefined" && /(access_token|refresh_token)=/.test(window.location.hash);
+
     void supabase.auth.getSession().then(({ data }) => {
-      applySession(data.session ?? null);
+      if (data.session) {
+        applySession(data.session);
+        return;
+      }
+      if (hashHasSession) {
+        window.setTimeout(() => {
+          if (active) applySession(null);
+        }, 2500);
+        return;
+      }
+      applySession(null);
     });
 
     return () => {
