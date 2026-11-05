@@ -288,6 +288,8 @@ export default function MatrizIA() {
           .map((message) => ({ role: message.role, content: message.content }));
 
         try {
+          // Contexto por agente: mundo elegido + documentos autorizados a ese agente.
+          const knowledge = await knowledgeContext(content, agent);
           const { data, error } = await supabase.functions.invoke("ai-matrix", {
             body: {
               model: agent.model,
