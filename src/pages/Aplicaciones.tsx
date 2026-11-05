@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
-import { LayoutGrid, Plus, Search, SlidersHorizontal } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ExternalLink, LayoutGrid, Loader2, Plus, RefreshCw, Search, SlidersHorizontal, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/auth-context";
 import { useApps, useDeleteApp, useVerifyTarget } from "@/hooks/use-portal-data";
 import { PageHeader, SectionTitle, EmptyState } from "@/components/portal/layout-bits";
@@ -34,6 +35,49 @@ export default function Aplicaciones() {
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [editingApp, setEditingApp] = useState<AppRow | null>(null);
+  const [live, setLive] = useState<{
+    total?: number;
+    actualizado?: string;
+    por_plataforma?: Record<string, number>;
+    apps?: Array<Record<string, unknown>>;
+  } | null>(null);
+  const [liveError, setLiveError] = useState<string | null>(null);
+  const [liveLoading, setLiveLoading] = useState(false);
+
+  async function loadLive() {
+    setLiveLoading(true);
+    setLiveError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("linea-fs", {
+        body: { action: "apps" },
+      });
+      if (error) throw new Error(error.message);
+      const payload = data as {
+        ok?: boolean;
+        data?: {
+          ok?: boolean;
+          total?: number;
+          actualizado?: string;
+          por_plataforma?: Record<string, number>;
+          apps?: Array<Record<string, unknown>>;
+          error?: string;
+        };
+      };
+      if (!payload?.ok || !payload?.data?.ok) {
+        throw new Error(payload?.data?.error ?? "El directorio vivo no respondió.");
+      }
+      setLive(payload.data);
+    } catch (caught) {
+      setLive(null);
+      setLiveError(caught instanceof Error ? caught.message : "No se pudo leer el directorio.");
+    } finally {
+      setLiveLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadLive();
+  }, []);
 
   const platforms = useMemo(
     () => Array.from(new Set((apps ?? []).map((app) => app.platform))).sort(),
@@ -116,6 +160,93 @@ export default function Aplicaciones() {
           </Button>
         ) : null}
       </PageHeader>
+
+      <div className="panel mb-4 p-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold text-foreground">Directorio vivo · Base44</p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              {live?.total ?? 0} aplicaciones
+              {live?.actualizado
+                ? ` · actualizado ${new Date(live.actualizado).toLocaleString("es-MX")}`
+                : ""}
+            </p>
+          </div>
+          <Button size="xs" variant="outlineMuted" onClick={() => void loadLive()} disabled={liveLoading}>
+            <RefreshCw className={liveLoading ? "h-3.5 w-3.5 animate-spin" : "h-3.5 w-3.5"} />
+            Actualizar
+          </Button>
+        </div>
+
+        {live?.por_plataforma ? (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {Object.entries(live.por_plataforma).map(([name, count]) => (
+              <span
+                key={name}
+                className="rounded-full border border-border bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground"
+              >
+                {name}: {count}
+              </span>
+            ))}
+          </div>
+        ) : null}
+
+        {liveError ? (
+          <div className="mt-2 flex items-start gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-2 text-[11px] text-destructive">
+            <TriangleAlert className="mt-0.5 h-3 w-3 shrink-0" />
+            {liveError}
+          </div>
+        ) : null}
+
+        {liveLoading && !live ? (
+          <p className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Consultando el directorio…
+          </p>
+        ) : null}
+
+        <div className="mt-2 max-h-64 space-y-1 overflow-y-auto scrollbar-thin">
+          {(live?.apps ?? []).map((app, index) => {
+            const nombre = String(app.nombre ?? app.name ?? "Sin nombre");
+            const plataforma = String(app.plataforma ?? app.platform ?? "");
+            const estado = String(app.estado ?? app.status ?? "");
+            const enlace = typeof app.enlace === "string" ? app.enlace : null;
+            const dueno = String(app.dueno ?? app.owner ?? "");
+            const nota = String(app.nota ?? app.summary ?? "");
+            return (
+              <div
+                key={`${nombre}-${index}`}
+                className="flex items-start justify-between gap-2 rounded-md border border-border/60 px-2 py-1.5"
+              >
+                <div className="min-w-0">
+                  <p className="truncate text-[11px] font-medium text-foreground">{nombre}</p>
+                  <p className="truncate text-[10px] text-muted-foreground">
+                    {plataforma}
+                    {estado ? ` · ${estado}` : ""}
+                    {dueno ? ` · ${dueno}` : ""}
+                    {nota ? ` · ${nota}` : ""}
+                  </p>
+                </div>
+                {enlace ? (
+                  <a
+                    href={enlace}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 rounded p-1 text-muted-foreground transition-colors hover:text-primary"
+                    aria-label={`Abrir ${nombre}`}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+
+        <p className="mt-2 text-[10px] text-muted-foreground">
+          Fuente: appsListar (Base44). Ver no es entrar: cada app abre con su propio acceso.
+        </p>
+      </div>
 
       <div className="panel mb-6 flex flex-col gap-3 p-3 lg:flex-row lg:items-center">
         <div className="relative flex-1">

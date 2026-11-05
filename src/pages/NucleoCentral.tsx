@@ -516,7 +516,30 @@ export default function NucleoCentral() {
             }
           }
         }
-        knowledge = [identityContext, documents, grantedDocs].filter(Boolean).join("\n\n");
+        let liveDirectory = "";
+        try {
+          const { data: appsPayload } = await supabase.functions.invoke("linea-fs", {
+            body: { action: "apps" },
+          });
+          const apps = (appsPayload as { data?: { apps?: Array<Record<string, unknown>> } })
+            ?.data?.apps;
+          if (Array.isArray(apps) && apps.length > 0) {
+            const lines = apps.slice(0, 20).map((app) => {
+              const nombre = String(app.nombre ?? "");
+              const plataforma = String(app.plataforma ?? "");
+              const estado = String(app.estado ?? "");
+              const enlace = typeof app.enlace === "string" ? app.enlace : "";
+              return `- ${nombre} (${plataforma}) · ${estado}${enlace ? ` · ${enlace}` : ""}`;
+            });
+            liveDirectory = `DIRECTORIO VIVO DE APLICACIONES\n${lines.join("\n")}`;
+          }
+        } catch {
+          // Si el directorio no responde, Atlas sigue con el resto del contexto.
+        }
+
+        knowledge = [identityContext, documents, grantedDocs, liveDirectory]
+          .filter(Boolean)
+          .join("\n\n");
       }
 
       const history = [

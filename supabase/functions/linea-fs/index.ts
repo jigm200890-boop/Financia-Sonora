@@ -54,6 +54,18 @@ Deno.serve(async (req) => {
       return json({ action, configured: true, length: clave.length });
     }
 
+    if (action === "apps") {
+      const plataforma =
+        typeof body?.plataforma === "string" ? body.plataforma.trim() : "";
+      const estado = typeof body?.estado === "string" ? body.estado.trim() : "";
+      const payload: Record<string, unknown> = { clave };
+      if (plataforma) payload.plataforma = plataforma;
+      if (estado) payload.estado = estado;
+
+      const result = await callLinea("appsListar", payload, clave);
+      return json({ action, ...result });
+    }
+
     if (action === "read") {
       const result = await callLinea("lineaLeer", { clave }, clave);
       return json({ action, ...result });
