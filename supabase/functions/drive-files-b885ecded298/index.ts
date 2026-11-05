@@ -88,6 +88,16 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => null);
     const action = typeof body?.action === "string" ? body.action : "list";
 
+    if (action === "diag") {
+      return json({
+        ok: true,
+        tokenPresent: Boolean(token),
+        tokenLength: token.length,
+        gateway: GATEWAY,
+        projectId: PROJECT_ID,
+      });
+    }
+
     if (action === "about") {
       const result = await callOperation(OP_ABOUT, token, {});
       if (!result.ok) {

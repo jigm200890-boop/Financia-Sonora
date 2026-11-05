@@ -1,0 +1,2 @@
+delete from public.portal_profiles where id = '8bb160cc-e774-40af-aad9-5fbebe5c6e4e';
+delete from auth.users where id = '8bb160cc-e774-40af-aad9-5fbebe5c6e4e' and email = 'qa.drive2@financiasonora.test';
