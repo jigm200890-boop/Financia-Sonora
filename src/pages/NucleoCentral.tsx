@@ -20,6 +20,7 @@ import {
   Paperclip,
   Pencil,
   Plus,
+  RefreshCw,
   Send,
   ShieldCheck,
   Target,
@@ -119,6 +120,15 @@ export default function NucleoCentral() {
   const { data: identity } = useCoreIdentity();
   const saveIdentity = useSaveCoreIdentity();
   const [identitySection, setIdentitySection] = useState<CoreIdentityRow | null>(null);
+  const [linea, setLinea] = useState<{
+    linea?: string;
+    total?: number;
+    entradas?: Array<Record<string, unknown>>;
+  } | null>(null);
+  const [lineaError, setLineaError] = useState<string | null>(null);
+  const [lineaLoading, setLineaLoading] = useState(false);
+  const [lineaForm, setLineaForm] = useState({ asunto: "", resumen: "", etiquetas: "" });
+  const [publishing, setPublishing] = useState(false);
   const setBackupStatus = useSetBackupStepStatus();
   const { data: coreConversation } = useCoreConversation();
   const { data: attachmentRows } = useAttachments(coreConversation?.id);
@@ -130,6 +140,12 @@ export default function NucleoCentral() {
     ? (searchParams.get("tab") as TabId)
     : "mesa";
   const [tab, setTab] = useState<TabId>(initialTab);
+
+  useEffect(() => {
+    if (tab === "coordinacion" && !linea && !lineaLoading && !lineaError) {
+      void loadLinea();
+    }
+  }, [tab, linea, lineaLoading, lineaError]);
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -148,6 +164,14 @@ export default function NucleoCentral() {
   const [agreementDialog, setAgreementDialog] = useState(false);
   const [editingAgreement, setEditingAgreement] = useState<AgreementRow | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
+
+  const entryText = (entry: Record<string, unknown>, keys: string[]) => {
+    for (const key of keys) {
+      const value = entry[key];
+      if (typeof value === "string" && value.trim()) return value;
+    }
+    return "";
+  };
 
   const worldName = (id: string | null) =>
     (worlds ?? []).find((world) => world.id === id)?.name ?? "Mundo";
@@ -194,6 +218,66 @@ export default function NucleoCentral() {
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
   }, [messages.length, sending]);
+
+  async function loadLinea() {
+    setLineaLoading(true);
+    setLineaError(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("linea-fs", {
+        body: { action: "read" },
+      });
+      if (error) throw new Error(error.message);
+      const payload = data as {
+        ok?: boolean;
+        data?: { ok?: boolean; linea?: string; total?: number; entradas?: Array<Record<string, unknown>>; error?: string };
+        error?: string;
+      };
+      if (!payload?.ok || !payload?.data?.ok) {
+        throw new Error(payload?.data?.error ?? payload?.error ?? "La línea no respondió.");
+      }
+      setLinea(payload.data);
+    } catch (caught) {
+      setLinea(null);
+      setLineaError(caught instanceof Error ? caught.message : "No se pudo leer la línea.");
+    } finally {
+      setLineaLoading(false);
+    }
+  }
+
+  async function publishLinea(event: React.FormEvent) {
+    event.preventDefault();
+    if (!lineaForm.asunto.trim() || !lineaForm.resumen.trim()) {
+      toast.warning("Asunto y resumen son obligatorios.");
+      return;
+    }
+    setPublishing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("linea-fs", {
+        body: {
+          action: "write",
+          asunto: lineaForm.asunto.trim(),
+          resumen: lineaForm.resumen.trim(),
+          etiquetas: lineaForm.etiquetas.trim(),
+        },
+      });
+      if (error) throw new Error(error.message);
+      const payload = data as {
+        ok?: boolean;
+        data?: { ok?: boolean; error?: string };
+        error?: string;
+      };
+      if (!payload?.ok || !payload?.data?.ok) {
+        throw new Error(payload?.data?.error ?? payload?.error ?? "No se pudo publicar.");
+      }
+      toast.success("Publicado en la Línea Compartida FS");
+      setLineaForm({ asunto: "", resumen: "", etiquetas: "" });
+      await loadLinea();
+    } catch (caught) {
+      toast.error(caught instanceof Error ? caught.message : "No se pudo publicar.");
+    } finally {
+      setPublishing(false);
+    }
+  }
 
   if (!isAdmin) {
     return (
@@ -1233,6 +1317,104 @@ export default function NucleoCentral() {
             <pre className="max-h-72 overflow-y-auto whitespace-pre-wrap rounded-md border border-border bg-muted/30 p-3 text-[11px] leading-relaxed text-muted-foreground scrollbar-thin">
               {buildBrief()}
             </pre>
+          </div>
+
+          <div className="panel p-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-semibold text-foreground">Línea Compartida FS</p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {linea?.linea ?? "Conexión con Base44"} · {linea?.total ?? 0} entradas
+                </p>
+              </div>
+              <Button
+                size="xs"
+                variant="outlineMuted"
+                onClick={() => void loadLinea()}
+                disabled={lineaLoading}
+              >
+                <RefreshCw className={cn("h-3.5 w-3.5", lineaLoading && "animate-spin")} />
+                Actualizar
+              </Button>
+            </div>
+
+            {lineaError ? (
+              <div className="mt-3 flex items-start gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-2 text-[11px] text-destructive">
+                <TriangleAlert className="mt-0.5 h-3 w-3 shrink-0" />
+                {lineaError}
+              </div>
+            ) : null}
+
+            {lineaLoading && !linea ? (
+              <p className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Leyendo la línea…
+              </p>
+            ) : null}
+
+            <div className="mt-3 max-h-64 space-y-2 overflow-y-auto scrollbar-thin">
+              {(linea?.entradas ?? []).map((entrada, index) => (
+                <article
+                  key={String(entrada.id ?? index)}
+                  className="rounded-md border border-border/70 bg-muted/20 px-3 py-2"
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <p className="text-xs font-medium text-foreground">
+                      {entryText(entrada, ["asunto", "title", "titulo"]) || "Sin asunto"}
+                    </p>
+                    <span className="shrink-0 text-[10px] text-muted-foreground">
+                      {entryText(entrada, ["fecha", "created_at", "fecha_creacion"])}
+                    </span>
+                  </div>
+                  <p className="mt-1 line-clamp-3 text-[11px] leading-relaxed text-muted-foreground">
+                    {entryText(entrada, ["resumen", "summary", "detalle"])}
+                  </p>
+                  <p className="mt-1 text-[10px] text-muted-foreground/80">
+                    {entryText(entrada, ["agente", "agent", "autor"])}
+                    {entryText(entrada, ["etiquetas", "tags"])
+                      ? ` · ${entryText(entrada, ["etiquetas", "tags"])}`
+                      : ""}
+                  </p>
+                </article>
+              ))}
+              {linea && (linea.entradas ?? []).length === 0 ? (
+                <p className="text-[11px] text-muted-foreground">La línea está vacía.</p>
+              ) : null}
+            </div>
+
+            <form onSubmit={publishLinea} className="mt-3 space-y-2 border-t border-border/60 pt-3">
+              <p className="text-[11px] font-medium text-foreground">Publicar como Atlas (ENTER)</p>
+              <Input
+                value={lineaForm.asunto}
+                onChange={(event) => setLineaForm({ ...lineaForm, asunto: event.target.value })}
+                placeholder="Asunto"
+                className="h-8 text-[11px]"
+              />
+              <Textarea
+                value={lineaForm.resumen}
+                onChange={(event) => setLineaForm({ ...lineaForm, resumen: event.target.value })}
+                placeholder="Resumen"
+                rows={2}
+                className="text-[11px]"
+              />
+              <div className="flex gap-2">
+                <Input
+                  value={lineaForm.etiquetas}
+                  onChange={(event) =>
+                    setLineaForm({ ...lineaForm, etiquetas: event.target.value })
+                  }
+                  placeholder="Etiquetas separadas por coma"
+                  className="h-8 flex-1 text-[11px]"
+                />
+                <Button type="submit" size="sm" disabled={publishing}>
+                  {publishing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                  Publicar
+                </Button>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Publicación manual. Nada se envía automáticamente.
+              </p>
+            </form>
           </div>
 
           <div className="panel p-4">

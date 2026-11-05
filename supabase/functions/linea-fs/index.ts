@@ -13,10 +13,14 @@ function json(payload: unknown, status = 200) {
   });
 }
 
-async function callLinea(path: string, body: Record<string, unknown>) {
+async function callLinea(path: string, body: Record<string, unknown>, clave: string) {
   const response = await fetch(`${BASE}/${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": clave,
+      Authorization: `Bearer ${clave}`,
+    },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(20000),
   });
@@ -46,8 +50,12 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => null);
     const action = typeof body?.action === "string" ? body.action : "";
 
+    if (action === "status") {
+      return json({ action, configured: true, length: clave.length });
+    }
+
     if (action === "read") {
-      const result = await callLinea("lineaLeer", { clave });
+      const result = await callLinea("lineaLeer", { clave }, clave);
       return json({ action, ...result });
     }
 
@@ -60,14 +68,18 @@ Deno.serve(async (req) => {
         return json({ error: "Asunto y resumen son obligatorios." }, 400);
       }
 
-      const result = await callLinea("lineaAgregar", {
+      const result = await callLinea(
+        "lineaAgregar",
+        {
+          clave,
+          agente: "Atlas (ENTER)",
+          asunto,
+          resumen,
+          etiquetas,
+          fuente: "API",
+        },
         clave,
-        agente: "Atlas (ENTER)",
-        asunto,
-        resumen,
-        etiquetas,
-        fuente: "API",
-      });
+      );
       return json({ action, ...result });
     }
 
