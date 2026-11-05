@@ -3713,6 +3713,39 @@ export type Database = {
         }
         Relationships: []
       }
+      portal_core_registry: {
+        Row: {
+          app_key: string
+          credits: number | null
+          health: string | null
+          hidden: boolean
+          id: string
+          note: string | null
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          app_key: string
+          credits?: number | null
+          health?: string | null
+          hidden?: boolean
+          id?: string
+          note?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          app_key?: string
+          credits?: number | null
+          health?: string | null
+          hidden?: boolean
+          id?: string
+          note?: string | null
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       portal_document_events: {
         Row: {
           action: string

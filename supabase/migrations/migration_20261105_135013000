@@ -1,0 +1,30 @@
+-- Núcleo limpio: capa curada sobre el directorio vivo
+create table if not exists public.portal_core_registry (
+  id uuid primary key default gen_random_uuid(),
+  app_key text not null unique,
+  credits numeric(10,2),
+  health text,
+  note text,
+  hidden boolean not null default false,
+  sort_order integer not null default 0,
+  updated_at timestamptz not null default now()
+);
+
+create trigger portal_core_registry_touch before update on public.portal_core_registry
+  for each row execute function public.portal_touch_updated_at();
+
+alter table public.portal_core_registry enable row level security;
+create policy portal_core_registry_admin_read on public.portal_core_registry for select to authenticated
+  using (public.portal_is_admin());
+create policy portal_core_registry_admin_insert on public.portal_core_registry for insert to authenticated
+  with check (public.portal_is_admin());
+create policy portal_core_registry_admin_update on public.portal_core_registry for update to authenticated
+  using (public.portal_is_admin()) with check (public.portal_is_admin());
+
+insert into public.portal_core_registry (app_key, credits, health, note, sort_order) values
+('prestacore', 22.55, 'Eje operativo', '12 módulos. La elegida por Jesús. Cuenta cronospersa02.', 1),
+('página web financia sonora (aliados y pyme)', null, 'Completa', 'Oferta, 13 aliados, proceso PyME. Cuenta thomasst2024.', 2),
+('portal público financia sonora', null, 'Formulario estándar', 'La solicitud buena. Debe ser la de todas las apps. Cuenta fsonorainmuebles.', 3),
+('financia sonora core', null, 'Buena: KPIs e importar', 'Panel financiero, reportes, importar y conocimiento. Sin cartera.', 4),
+('financiapro sonora', 0.25, 'Sin crédito', 'Rutas, mapa y carteras son carteles. Solo consulta.', 5)
+on conflict (app_key) do nothing;

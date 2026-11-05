@@ -25,6 +25,7 @@ export type CoreIdentityRow = Tables["portal_core_identity"]["Row"];
 export type AttachmentRow = Tables["portal_attachments"]["Row"];
 export type DocumentGrantRow = Tables["portal_document_grants"]["Row"];
 export type DocumentEventRow = Tables["portal_document_events"]["Row"];
+export type CoreRegistryRow = Tables["portal_core_registry"]["Row"];
 
 export type WorkflowStep = {
   title: string;

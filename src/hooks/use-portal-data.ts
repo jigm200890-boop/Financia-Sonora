@@ -16,6 +16,7 @@ import {
   type BackupStepRow,
   type AttachmentRow,
   type CoreIdentityRow,
+  type CoreRegistryRow,
   type DocumentEventRow,
   type DocumentGrantRow,
   type KnowledgeVersionRow,
@@ -46,6 +47,7 @@ export const qk = {
   agreements: [ROOT, "agreements"],
   backupSteps: [ROOT, "backup-steps"],
   coreIdentity: [ROOT, "core-identity"],
+  coreRegistry: [ROOT, "core-registry"],
   attachments: (id: string) => [ROOT, "attachments", id],
   grants: (id: string) => [ROOT, "grants", id],
   events: (id: string) => [ROOT, "events", id],
@@ -739,6 +741,46 @@ export function useCoreIdentity() {
       fail(error);
       return data ?? [];
     },
+  });
+}
+
+export function useCoreRegistry() {
+  return useQuery({
+    queryKey: qk.coreRegistry,
+    queryFn: async (): Promise<CoreRegistryRow[]> => {
+      const { data, error } = await supabase
+        .from("portal_core_registry")
+        .select("*")
+        .order("sort_order", { ascending: true });
+      fail(error);
+      return data ?? [];
+    },
+  });
+}
+
+export function useSaveCoreRegistry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: {
+      appKey: string;
+      credits: number | null;
+      health: string | null;
+      note: string | null;
+      hidden: boolean;
+    }) => {
+      const { error } = await supabase.from("portal_core_registry").upsert(
+        {
+          app_key: input.appKey,
+          credits: input.credits,
+          health: input.health,
+          note: input.note,
+          hidden: input.hidden,
+        },
+        { onConflict: "app_key" },
+      );
+      fail(error);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.coreRegistry }),
   });
 }
 

@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Circle,
   ClipboardCopy,
+  ExternalLink,
   FileText,
   Fingerprint,
   FolderOpen,
@@ -23,6 +24,7 @@ import {
   RefreshCw,
   Send,
   ShieldCheck,
+  Table2,
   Target,
   Trash2,
   TriangleAlert,
@@ -39,6 +41,8 @@ import {
   useAttachments,
   useBackupSteps,
   useCoreIdentity,
+  useCoreRegistry,
+  useSaveCoreRegistry,
   useCoreConversation,
   useDeleteAgreement,
   useDeleteObjective,
@@ -89,6 +93,7 @@ import { cn } from "@/lib/utils";
 
 const TABS = [
   { id: "mesa", label: "Mesa de trabajo", icon: MessageSquare },
+  { id: "limpio", label: "Núcleo limpio", icon: Table2 },
   { id: "identidad", label: "Identidad", icon: Fingerprint },
   { id: "acuerdos", label: "Acuerdos", icon: ShieldCheck },
   { id: "objetivos", label: "Objetivos", icon: Target },
@@ -1030,6 +1035,8 @@ export default function NucleoCentral() {
         </div>
       ) : null}
 
+      {tab === "limpio" ? <CleanCorePanel /> : null}
+
       {tab === "identidad" ? (
         <IdentityPanel
           rows={identity ?? []}
@@ -1945,6 +1952,295 @@ function AgreementDialog({
         </form>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function CleanCorePanel() {
+  const { data: registry } = useCoreRegistry();
+  const save = useSaveCoreRegistry();
+  const [apps, setApps] = useState<Array<Record<string, unknown>>>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [updated, setUpdated] = useState<string | null>(null);
+  const [editing, setEditing] = useState<{
+    key: string;
+    name: string;
+    credits: string;
+    health: string;
+    note: string;
+    hidden: boolean;
+  } | null>(null);
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke("linea-fs", {
+        body: { action: "apps" },
+      });
+      if (invokeError) throw new Error(invokeError.message);
+      const payload = data as {
+        ok?: boolean;
+        data?: { apps?: Array<Record<string, unknown>>; actualizado?: string; error?: string };
+      };
+      if (!payload?.ok || !payload.data?.apps) {
+        throw new Error(payload?.data?.error ?? "El directorio vivo no respondió.");
+      }
+      setApps(payload.data.apps);
+      setUpdated(payload.data.actualizado ?? new Date().toISOString());
+    } catch (caught) {
+      setApps([]);
+      setError(caught instanceof Error ? caught.message : "No se pudo leer el directorio.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const byKey = useMemo(
+    () => new Map((registry ?? []).map((row) => [row.app_key, row])),
+    [registry],
+  );
+
+  const rows = useMemo(
+    () =>
+      apps
+        .map((app) => {
+          const name = String(app.nombre ?? app.name ?? "Sin nombre");
+          const key = name.toLowerCase().trim();
+          return { app, name, key, reg: byKey.get(key) };
+        })
+        .filter((row) => !row.reg?.hidden)
+        .sort((a, b) => {
+          const orderA = a.reg?.sort_order ?? 999;
+          const orderB = b.reg?.sort_order ?? 999;
+          if (orderA !== orderB) return orderA - orderB;
+          return a.name.localeCompare(b.name);
+        }),
+    [apps, byKey],
+  );
+
+  return (
+    <section className="space-y-3">
+      <div className="panel p-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold text-foreground">Núcleo Central Operativo</p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              {rows.length} aplicaciones visibles
+              {updated ? ` · actualizado ${formatDateTime(updated)}` : ""}
+            </p>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Solo lectura sobre las apps: aquí se abre y se enlaza, no se modifica nada por dentro.
+            </p>
+          </div>
+          <Button size="xs" variant="outlineMuted" onClick={() => void load()} disabled={loading}>
+            <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+            Actualizar
+          </Button>
+        </div>
+        {error ? (
+          <div className="mt-2 flex items-start gap-1.5 rounded-md border border-destructive/40 bg-destructive/10 px-2.5 py-2 text-[11px] text-destructive">
+            <TriangleAlert className="mt-0.5 h-3 w-3 shrink-0" />
+            {error}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="panel overflow-x-auto">
+        <table className="w-full min-w-[760px] text-left text-xs">
+          <thead>
+            <tr className="border-b border-border/70 text-[10px] uppercase tracking-[0.12em] text-muted-foreground">
+              <th className="px-3 py-2.5 font-semibold">Aplicación</th>
+              <th className="px-3 py-2.5 font-semibold">Plataforma</th>
+              <th className="px-3 py-2.5 font-semibold">Estado</th>
+              <th className="px-3 py-2.5 font-semibold">Créditos</th>
+              <th className="px-3 py-2.5 font-semibold">Salud</th>
+              <th className="px-3 py-2.5 font-semibold">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ app, name, key, reg }) => {
+              const enlace = typeof app.enlace === "string" ? app.enlace : null;
+              const plataforma = String(app.plataforma ?? "");
+              const estado = String(app.estado ?? "");
+              const nota = reg?.note ?? (typeof app.nota === "string" ? app.nota : "");
+              return (
+                <tr key={key} className="border-b border-border/40 align-top last:border-0">
+                  <td className="px-3 py-2.5">
+                    <p className="text-[12px] font-medium text-foreground">{name}</p>
+                    {nota ? (
+                      <p className="mt-0.5 text-[10px] leading-relaxed text-muted-foreground">
+                        {nota}
+                      </p>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-2.5 text-[11px] text-muted-foreground">{plataforma}</td>
+                  <td className="px-3 py-2.5">
+                    <span
+                      className={cn(
+                        "rounded-full border px-2 py-0.5 text-[10px]",
+                        /activa/i.test(estado)
+                          ? "border-success/40 bg-success/10 text-success"
+                          : /pendiente|verificar|limitada/i.test(estado)
+                            ? "border-warning/40 bg-warning/10 text-warning"
+                            : "border-border bg-muted/50 text-muted-foreground",
+                      )}
+                    >
+                      {estado || "—"}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-[11px] font-semibold text-foreground">
+                    {typeof reg?.credits === "number" ? reg.credits : "—"}
+                  </td>
+                  <td className="px-3 py-2.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    {reg?.health ?? "—"}
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-1">
+                      {enlace ? (
+                        <a
+                          href={enlace}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 rounded border border-success/40 bg-success/10 px-2 py-1 text-[10px] text-success"
+                        >
+                          <ExternalLink className="h-3 w-3" />
+                          Abrir
+                        </a>
+                      ) : null}
+                      <Button
+                        size="xs"
+                        variant="ghost"
+                        className="h-7 px-1.5 text-[10px]"
+                        onClick={() =>
+                          setEditing({
+                            key,
+                            name,
+                            credits: typeof reg?.credits === "number" ? String(reg.credits) : "",
+                            health: reg?.health ?? "",
+                            note: reg?.note ?? "",
+                            hidden: reg?.hidden ?? false,
+                          })
+                        }
+                      >
+                        <Pencil className="h-3 w-3" />
+                        Editar
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+            {rows.length === 0 && !loading ? (
+              <tr>
+                <td colSpan={6} className="px-3 py-8 text-center text-[11px] text-muted-foreground">
+                  Sin aplicaciones para mostrar.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+
+      <p className="px-1 text-[10px] text-muted-foreground">
+        Créditos y salud son la foto de hoy. Lo no verificado aparece con guion. Ocultar una app aquí
+        no la borra de Base44 ni del portal.
+      </p>
+
+      <Dialog
+        open={!!editing}
+        onOpenChange={(open) => {
+          if (!open) setEditing(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="truncate">Editar ficha curada</DialogTitle>
+            <DialogDescription className="truncate">{editing?.name}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <p className="text-[11px] font-medium text-foreground">Créditos</p>
+              <Input
+                value={editing?.credits ?? ""}
+                onChange={(event) =>
+                  setEditing((prev) => (prev ? { ...prev, credits: event.target.value } : prev))
+                }
+                placeholder="Ej. 22.55 · vacío = sin verificar"
+                className="h-8 text-[11px]"
+                inputMode="decimal"
+              />
+            </div>
+            <div className="space-y-1">
+              <p className="text-[11px] font-medium text-foreground">Salud</p>
+              <Input
+                value={editing?.health ?? ""}
+                onChange={(event) =>
+                  setEditing((prev) => (prev ? { ...prev, health: event.target.value } : prev))
+                }
+                placeholder="Ej. Eje operativo"
+                className="h-8 text-[11px]"
+              />
+            </div>
+            <div className="space-y-1">
+              <p className="text-[11px] font-medium text-foreground">Nota</p>
+              <Input
+                value={editing?.note ?? ""}
+                onChange={(event) =>
+                  setEditing((prev) => (prev ? { ...prev, note: event.target.value } : prev))
+                }
+                placeholder="Nota corta"
+                className="h-8 text-[11px]"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-[11px] text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={editing?.hidden ?? false}
+                onChange={(event) =>
+                  setEditing((prev) => (prev ? { ...prev, hidden: event.target.checked } : prev))
+                }
+              />
+              Ocultar de esta vista (no se borra nada)
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditing(null)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={save.isPending || !editing}
+              onClick={() => {
+                if (!editing) return;
+                const parsed = Number(editing.credits);
+                void save
+                  .mutateAsync({
+                    appKey: editing.key,
+                    credits: editing.credits.trim() === "" || Number.isNaN(parsed) ? null : parsed,
+                    health: editing.health.trim() || null,
+                    note: editing.note.trim() || null,
+                    hidden: editing.hidden,
+                  })
+                  .then(() => {
+                    toast.success("Ficha actualizada");
+                    setEditing(null);
+                  })
+                  .catch((caught: unknown) =>
+                    toast.error(caught instanceof Error ? caught.message : "No se pudo guardar."),
+                  );
+              }}
+            >
+              {save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Guardar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </section>
   );
 }
 
