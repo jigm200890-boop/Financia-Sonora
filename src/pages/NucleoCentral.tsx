@@ -38,6 +38,7 @@ import {
   insertMessage,
   useAgents,
   useAgreements,
+  useApps,
   useAttachments,
   useBackupSteps,
   useCoreIdentity,
@@ -78,7 +79,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { formatBytes, formatDate, formatDateTime } from "@/lib/portal-ui";
+import { formatBytes, formatDate, formatDateTime, statusMeta } from "@/lib/portal-ui";
 import { modelLabel } from "@/lib/ai-models";
 import { KNOWLEDGE_BUCKET } from "@/lib/portal-types";
 import type {
@@ -1957,6 +1958,7 @@ function AgreementDialog({
 
 function CleanCorePanel() {
   const { data: registry } = useCoreRegistry();
+  const { data: portalApps } = useApps();
   const save = useSaveCoreRegistry();
   const [apps, setApps] = useState<Array<Record<string, unknown>>>([]);
   const [loading, setLoading] = useState(false);
@@ -2005,23 +2007,57 @@ function CleanCorePanel() {
     [registry],
   );
 
-  const rows = useMemo(
-    () =>
-      apps
-        .map((app) => {
-          const name = String(app.nombre ?? app.name ?? "Sin nombre");
-          const key = name.toLowerCase().trim();
-          return { app, name, key, reg: byKey.get(key) };
-        })
-        .filter((row) => !row.reg?.hidden)
-        .sort((a, b) => {
-          const orderA = a.reg?.sort_order ?? 999;
-          const orderB = b.reg?.sort_order ?? 999;
-          if (orderA !== orderB) return orderA - orderB;
-          return a.name.localeCompare(b.name);
-        }),
-    [apps, byKey],
-  );
+  const rows = useMemo(() => {
+    const merged: Array<{
+      name: string;
+      key: string;
+      platform: string;
+      status: string;
+      url: string | null;
+      note: string;
+    }> = [];
+    const seen = new Set<string>();
+
+    for (const app of apps) {
+      const name = String(app.nombre ?? app.name ?? "Sin nombre");
+      const key = name.toLowerCase().trim();
+      seen.add(key);
+      merged.push({
+        name,
+        key,
+        platform: String(app.plataforma ?? ""),
+        status: String(app.estado ?? ""),
+        url: typeof app.enlace === "string" ? app.enlace : null,
+        note: typeof app.nota === "string" ? app.nota : "",
+      });
+    }
+
+    // Los núcleos y apps del portal que no estén en el directorio de Base44
+    // también entran: NEXO, Centro de Control y las demás fichas propias.
+    for (const app of portalApps ?? []) {
+      const key = app.name.toLowerCase().trim();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push({
+        name: app.name,
+        key,
+        platform: app.platform,
+        status: statusMeta(app.status).label,
+        url: app.app_url,
+        note: app.summary ?? "",
+      });
+    }
+
+    return merged
+      .map((row) => ({ ...row, reg: byKey.get(row.key) }))
+      .filter((row) => !row.reg?.hidden)
+      .sort((a, b) => {
+        const orderA = a.reg?.sort_order ?? 999;
+        const orderB = b.reg?.sort_order ?? 999;
+        if (orderA !== orderB) return orderA - orderB;
+        return a.name.localeCompare(b.name);
+      });
+  }, [apps, portalApps, byKey]);
 
   return (
     <section className="space-y-3">
@@ -2063,11 +2099,11 @@ function CleanCorePanel() {
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ app, name, key, reg }) => {
-              const enlace = typeof app.enlace === "string" ? app.enlace : null;
-              const plataforma = String(app.plataforma ?? "");
-              const estado = String(app.estado ?? "");
-              const nota = reg?.note ?? (typeof app.nota === "string" ? app.nota : "");
+            {rows.map(({ name, key, platform, status, url, note, reg }) => {
+              const enlace = url;
+              const plataforma = platform;
+              const estado = status;
+              const nota = reg?.note ?? note;
               return (
                 <tr key={key} className="border-b border-border/40 align-top last:border-0">
                   <td className="px-3 py-2.5">
