@@ -18,6 +18,7 @@ import {
   Loader2,
   Lock,
   MessageSquare,
+  Mic,
   Paperclip,
   Pencil,
   Plus,
@@ -28,7 +29,9 @@ import {
   Target,
   Trash2,
   TriangleAlert,
+  Square,
   Upload,
+  Volume2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -81,6 +84,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { formatBytes, formatDate, formatDateTime, statusMeta } from "@/lib/portal-ui";
 import { modelLabel } from "@/lib/ai-models";
+import { useSpeechRecognition, useSpeechSynthesis } from "@/hooks/use-speech";
 import { KNOWLEDGE_BUCKET } from "@/lib/portal-types";
 import type {
   AgreementRow,
@@ -155,6 +159,31 @@ export default function NucleoCentral() {
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const {
+    supported: micSupported,
+    listening,
+    error: micError,
+    start: startMic,
+    stop: stopMic,
+    clearError: clearMicError,
+  } = useSpeechRecognition((text) =>
+    setInput((prev) => (prev ? `${prev} ${text}` : text)),
+  );
+  const {
+    supported: ttsSupported,
+    speaking,
+    speak,
+    stop: stopSpeaking,
+  } = useSpeechSynthesis();
+
+  useEffect(() => {
+    if (micError) {
+      toast.error(micError);
+      clearMicError();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [micError]);
+
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [attachments, setAttachments] = useState<AttachmentRow[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -811,6 +840,21 @@ export default function NucleoCentral() {
                         <ListChecks className="h-3 w-3" />
                         Crear tarea
                       </Button>
+                      {ttsSupported ? (
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          className="h-6 px-1.5 text-[10px]"
+                          onClick={() => (speaking ? stopSpeaking() : speak(message.content))}
+                        >
+                          {speaking ? (
+                            <Square className="h-3 w-3" />
+                          ) : (
+                            <Volume2 className="h-3 w-3" />
+                          )}
+                          {speaking ? "Detener" : "Escuchar"}
+                        </Button>
+                      ) : null}
                       <Button
                         size="xs"
                         variant="ghost"
@@ -894,6 +938,24 @@ export default function NucleoCentral() {
               <div className="flex items-end gap-2">
                 <Button
                   type="button"
+                  variant={listening ? "default" : "outlineMuted"}
+                  size="icon"
+                  className={cn("h-[52px] w-11 shrink-0", listening && "animate-pulse")}
+                  onClick={() => (listening ? stopMic() : startMic())}
+                  disabled={!micSupported}
+                  title={
+                    micSupported
+                      ? listening
+                        ? "Detener dictado"
+                        : "Dictar por voz"
+                      : "Este navegador no soporta dictado"
+                  }
+                  aria-label="Dictado por voz"
+                >
+                  <Mic className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
                   variant="outlineMuted"
                   size="icon"
                   className="h-[52px] w-11 shrink-0"
@@ -933,7 +995,8 @@ export default function NucleoCentral() {
               </div>
               <p className="mt-2 text-[10px] text-muted-foreground">
                 Adjuntos: PDF, Word, Excel, PowerPoint o TXT · máx. 20 MB. El texto se extrae en el
-                servidor y se envía solo a Atlas.
+                servidor y se envía solo a Atlas. Micrófono: dictado en español con permiso del
+                navegador.
               </p>
               {!atlas || !coreConversation ? (
                 <p className="mt-2 text-[11px] text-destructive">
