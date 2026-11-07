@@ -29,7 +29,8 @@ import {
   Target,
   Trash2,
   TriangleAlert,
-  Square,
+  Pause,
+  Play,
   Upload,
   Volume2,
   X,
@@ -172,8 +173,10 @@ export default function NucleoCentral() {
   const {
     supported: ttsSupported,
     speaking,
+    paused: speechPaused,
     speak,
-    stop: stopSpeaking,
+    pause: pauseSpeech,
+    resume: resumeSpeech,
   } = useSpeechSynthesis();
 
   useEffect(() => {
@@ -845,14 +848,23 @@ export default function NucleoCentral() {
                           size="xs"
                           variant="ghost"
                           className="h-6 px-1.5 text-[10px]"
-                          onClick={() => (speaking ? stopSpeaking() : speak(message.content))}
+                          onClick={() => {
+                            if (!speaking) {
+                              speak(message.content);
+                              return;
+                            }
+                            if (speechPaused) resumeSpeech();
+                            else pauseSpeech();
+                          }}
                         >
-                          {speaking ? (
-                            <Square className="h-3 w-3" />
-                          ) : (
+                          {!speaking ? (
                             <Volume2 className="h-3 w-3" />
+                          ) : speechPaused ? (
+                            <Play className="h-3 w-3" />
+                          ) : (
+                            <Pause className="h-3 w-3" />
                           )}
-                          {speaking ? "Detener" : "Escuchar"}
+                          {!speaking ? "Escuchar" : speechPaused ? "Reanudar" : "Pausar"}
                         </Button>
                       ) : null}
                       <Button

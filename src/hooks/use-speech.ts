@@ -97,6 +97,7 @@ export function useSpeechRecognition(onFinalText: (text: string) => void) {
 export function useSpeechSynthesis() {
   const [supported, setSupported] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [paused, setPaused] = useState(false);
 
   useEffect(() => {
     setSupported(typeof window !== "undefined" && "speechSynthesis" in window);
@@ -105,6 +106,17 @@ export function useSpeechSynthesis() {
   const stop = useCallback(() => {
     window.speechSynthesis?.cancel();
     setSpeaking(false);
+    setPaused(false);
+  }, []);
+
+  const pause = useCallback(() => {
+    window.speechSynthesis?.pause();
+    setPaused(true);
+  }, []);
+
+  const resume = useCallback(() => {
+    window.speechSynthesis?.resume();
+    setPaused(false);
   }, []);
 
   const speak = useCallback(
@@ -117,13 +129,20 @@ export function useSpeechSynthesis() {
       const voices = window.speechSynthesis.getVoices();
       const spanish = voices.find((voice) => voice.lang?.toLowerCase().startsWith("es"));
       if (spanish) utterance.voice = spanish;
-      utterance.onend = () => setSpeaking(false);
-      utterance.onerror = () => setSpeaking(false);
+      utterance.onend = () => {
+        setSpeaking(false);
+        setPaused(false);
+      };
+      utterance.onerror = () => {
+        setSpeaking(false);
+        setPaused(false);
+      };
       setSpeaking(true);
+      setPaused(false);
       window.speechSynthesis.speak(utterance);
     },
     [],
   );
 
-  return { supported, speaking, speak, stop };
+  return { supported, speaking, paused, speak, pause, resume, stop };
 }
